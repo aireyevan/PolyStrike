@@ -1,13 +1,13 @@
 //
-//  NeonSurvivorUITestsLaunchTests.swift
-//  NeonSurvivorUITests
+//  PolystrikeUITestsLaunchTests.swift
+//  PolystrikeUITests
 //
 //  Created by Evan Airey on 9/8/26.
 //
 
 import XCTest
 
-final class NeonSurvivorUITestsLaunchTests: XCTestCase {
+final class PolystrikeUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true

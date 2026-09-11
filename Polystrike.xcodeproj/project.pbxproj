@@ -12,37 +12,37 @@
 			containerPortal = 4CDC3FCB3050549F00D21F08 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 4CDC3FD2305054A000D21F08;
-			remoteInfo = NeonSurvivor;
+			remoteInfo = Polystrike;
 		};
 		4CDC3FF7305054A100D21F08 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 4CDC3FCB3050549F00D21F08 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 4CDC3FD2305054A000D21F08;
-			remoteInfo = NeonSurvivor;
+			remoteInfo = Polystrike;
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		4CDC3FD3305054A000D21F08 /* NeonSurvivor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NeonSurvivor.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		4CDC3FEC305054A100D21F08 /* NeonSurvivorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NeonSurvivorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		4CDC3FF6305054A100D21F08 /* NeonSurvivorUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NeonSurvivorUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4CDC3FD3305054A000D21F08 /* Polystrike.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Polystrike.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4CDC3FEC305054A100D21F08 /* PolystrikeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PolystrikeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4CDC3FF6305054A100D21F08 /* PolystrikeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PolystrikeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		4CDC3FD5305054A000D21F08 /* NeonSurvivor */ = {
+		4CDC3FD5305054A000D21F08 /* Polystrike */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = NeonSurvivor;
+			path = Polystrike;
 			sourceTree = "<group>";
 		};
-		4CDC3FEF305054A100D21F08 /* NeonSurvivorTests */ = {
+		4CDC3FEF305054A100D21F08 /* PolystrikeTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = NeonSurvivorTests;
+			path = PolystrikeTests;
 			sourceTree = "<group>";
 		};
-		4CDC3FF9305054A100D21F08 /* NeonSurvivorUITests */ = {
+		4CDC3FF9305054A100D21F08 /* PolystrikeUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = NeonSurvivorUITests;
+			path = PolystrikeUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -75,9 +75,9 @@
 		4CDC3FCA3050549F00D21F08 = {
 			isa = PBXGroup;
 			children = (
-				4CDC3FD5305054A000D21F08 /* NeonSurvivor */,
-				4CDC3FEF305054A100D21F08 /* NeonSurvivorTests */,
-				4CDC3FF9305054A100D21F08 /* NeonSurvivorUITests */,
+				4CDC3FD5305054A000D21F08 /* Polystrike */,
+				4CDC3FEF305054A100D21F08 /* PolystrikeTests */,
+				4CDC3FF9305054A100D21F08 /* PolystrikeUITests */,
 				4CDC3FD4305054A000D21F08 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -85,9 +85,9 @@
 		4CDC3FD4305054A000D21F08 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				4CDC3FD3305054A000D21F08 /* NeonSurvivor.app */,
-				4CDC3FEC305054A100D21F08 /* NeonSurvivorTests.xctest */,
-				4CDC3FF6305054A100D21F08 /* NeonSurvivorUITests.xctest */,
+				4CDC3FD3305054A000D21F08 /* Polystrike.app */,
+				4CDC3FEC305054A100D21F08 /* PolystrikeTests.xctest */,
+				4CDC3FF6305054A100D21F08 /* PolystrikeUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -95,9 +95,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		4CDC3FD2305054A000D21F08 /* NeonSurvivor */ = {
+		4CDC3FD2305054A000D21F08 /* Polystrike */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 4CDC4000305054A100D21F08 /* Build configuration list for PBXNativeTarget "NeonSurvivor" */;
+			buildConfigurationList = 4CDC4000305054A100D21F08 /* Build configuration list for PBXNativeTarget "Polystrike" */;
 			buildPhases = (
 				4CDC3FCF305054A000D21F08 /* Sources */,
 				4CDC3FD0305054A000D21F08 /* Frameworks */,
@@ -108,18 +108,18 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				4CDC3FD5305054A000D21F08 /* NeonSurvivor */,
+				4CDC3FD5305054A000D21F08 /* Polystrike */,
 			);
-			name = NeonSurvivor;
+			name = Polystrike;
 			packageProductDependencies = (
 			);
-			productName = NeonSurvivor;
-			productReference = 4CDC3FD3305054A000D21F08 /* NeonSurvivor.app */;
+			productName = Polystrike;
+			productReference = 4CDC3FD3305054A000D21F08 /* Polystrike.app */;
 			productType = "com.apple.product-type.application";
 		};
-		4CDC3FEB305054A100D21F08 /* NeonSurvivorTests */ = {
+		4CDC3FEB305054A100D21F08 /* PolystrikeTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 4CDC4003305054A100D21F08 /* Build configuration list for PBXNativeTarget "NeonSurvivorTests" */;
+			buildConfigurationList = 4CDC4003305054A100D21F08 /* Build configuration list for PBXNativeTarget "PolystrikeTests" */;
 			buildPhases = (
 				4CDC3FE8305054A100D21F08 /* Sources */,
 				4CDC3FE9305054A100D21F08 /* Frameworks */,
@@ -131,18 +131,18 @@
 				4CDC3FEE305054A100D21F08 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				4CDC3FEF305054A100D21F08 /* NeonSurvivorTests */,
+				4CDC3FEF305054A100D21F08 /* PolystrikeTests */,
 			);
-			name = NeonSurvivorTests;
+			name = PolystrikeTests;
 			packageProductDependencies = (
 			);
-			productName = NeonSurvivorTests;
-			productReference = 4CDC3FEC305054A100D21F08 /* NeonSurvivorTests.xctest */;
+			productName = PolystrikeTests;
+			productReference = 4CDC3FEC305054A100D21F08 /* PolystrikeTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		4CDC3FF5305054A100D21F08 /* NeonSurvivorUITests */ = {
+		4CDC3FF5305054A100D21F08 /* PolystrikeUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 4CDC4006305054A100D21F08 /* Build configuration list for PBXNativeTarget "NeonSurvivorUITests" */;
+			buildConfigurationList = 4CDC4006305054A100D21F08 /* Build configuration list for PBXNativeTarget "PolystrikeUITests" */;
 			buildPhases = (
 				4CDC3FF2305054A100D21F08 /* Sources */,
 				4CDC3FF3305054A100D21F08 /* Frameworks */,
@@ -154,13 +154,13 @@
 				4CDC3FF8305054A100D21F08 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				4CDC3FF9305054A100D21F08 /* NeonSurvivorUITests */,
+				4CDC3FF9305054A100D21F08 /* PolystrikeUITests */,
 			);
-			name = NeonSurvivorUITests;
+			name = PolystrikeUITests;
 			packageProductDependencies = (
 			);
-			productName = NeonSurvivorUITests;
-			productReference = 4CDC3FF6305054A100D21F08 /* NeonSurvivorUITests.xctest */;
+			productName = PolystrikeUITests;
+			productReference = 4CDC3FF6305054A100D21F08 /* PolystrikeUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -186,7 +186,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 4CDC3FCE3050549F00D21F08 /* Build configuration list for PBXProject "NeonSurvivor" */;
+			buildConfigurationList = 4CDC3FCE3050549F00D21F08 /* Build configuration list for PBXProject "Polystrike" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -200,9 +200,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				4CDC3FD2305054A000D21F08 /* NeonSurvivor */,
-				4CDC3FEB305054A100D21F08 /* NeonSurvivorTests */,
-				4CDC3FF5305054A100D21F08 /* NeonSurvivorUITests */,
+				4CDC3FD2305054A000D21F08 /* Polystrike */,
+				4CDC3FEB305054A100D21F08 /* PolystrikeTests */,
+				4CDC3FF5305054A100D21F08 /* PolystrikeUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -258,12 +258,12 @@
 /* Begin PBXTargetDependency section */
 		4CDC3FEE305054A100D21F08 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 4CDC3FD2305054A000D21F08 /* NeonSurvivor */;
+			target = 4CDC3FD2305054A000D21F08 /* Polystrike */;
 			targetProxy = 4CDC3FED305054A100D21F08 /* PBXContainerItemProxy */;
 		};
 		4CDC3FF8305054A100D21F08 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 4CDC3FD2305054A000D21F08 /* NeonSurvivor */;
+			target = 4CDC3FD2305054A000D21F08 /* Polystrike */;
 			targetProxy = 4CDC3FF7305054A100D21F08 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -395,19 +395,21 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9U5P59UGTC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
 				INFOPLIST_KEY_UIStatusBarHidden = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = evan.com.NeonSurvivor;
+				INFOPLIST_KEY_CFBundleDisplayName = POLYSTRIKE;
+				PRODUCT_BUNDLE_IDENTIFIER = evan.com.Polystrike;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -422,19 +424,21 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 9U5P59UGTC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
 				INFOPLIST_KEY_UIStatusBarHidden = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = evan.com.NeonSurvivor;
+				INFOPLIST_KEY_CFBundleDisplayName = POLYSTRIKE;
+				PRODUCT_BUNDLE_IDENTIFIER = evan.com.Polystrike;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -451,12 +455,12 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = evan.com.NeonSurvivorTests;
+				PRODUCT_BUNDLE_IDENTIFIER = evan.com.PolystrikeTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NeonSurvivor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NeonSurvivor";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Polystrike.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Polystrike";
 			};
 			name = Debug;
 		};
@@ -469,12 +473,12 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = evan.com.NeonSurvivorTests;
+				PRODUCT_BUNDLE_IDENTIFIER = evan.com.PolystrikeTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NeonSurvivor.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/NeonSurvivor";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Polystrike.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Polystrike";
 			};
 			name = Release;
 		};
@@ -485,12 +489,12 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = evan.com.NeonSurvivorUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = evan.com.PolystrikeUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = NeonSurvivor;
+				TEST_TARGET_NAME = Polystrike;
 			};
 			name = Debug;
 		};
@@ -501,19 +505,19 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = evan.com.NeonSurvivorUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = evan.com.PolystrikeUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = NeonSurvivor;
+				TEST_TARGET_NAME = Polystrike;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		4CDC3FCE3050549F00D21F08 /* Build configuration list for PBXProject "NeonSurvivor" */ = {
+		4CDC3FCE3050549F00D21F08 /* Build configuration list for PBXProject "Polystrike" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				4CDC3FFE305054A100D21F08 /* Debug */,
@@ -522,7 +526,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		4CDC4000305054A100D21F08 /* Build configuration list for PBXNativeTarget "NeonSurvivor" */ = {
+		4CDC4000305054A100D21F08 /* Build configuration list for PBXNativeTarget "Polystrike" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				4CDC4001305054A100D21F08 /* Debug */,
@@ -531,7 +535,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		4CDC4003305054A100D21F08 /* Build configuration list for PBXNativeTarget "NeonSurvivorTests" */ = {
+		4CDC4003305054A100D21F08 /* Build configuration list for PBXNativeTarget "PolystrikeTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				4CDC4004305054A100D21F08 /* Debug */,
@@ -540,7 +544,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		4CDC4006305054A100D21F08 /* Build configuration list for PBXNativeTarget "NeonSurvivorUITests" */ = {
+		4CDC4006305054A100D21F08 /* Build configuration list for PBXNativeTarget "PolystrikeUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				4CDC4007305054A100D21F08 /* Debug */,

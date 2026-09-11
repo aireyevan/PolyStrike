@@ -1,13 +1,13 @@
 //
-//  NeonSurvivorUITests.swift
-//  NeonSurvivorUITests
+//  PolystrikeUITests.swift
+//  PolystrikeUITests
 //
 //  Created by Evan Airey on 9/8/26.
 //
 
 import XCTest
 
-final class NeonSurvivorUITests: XCTestCase {
+final class PolystrikeUITests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.

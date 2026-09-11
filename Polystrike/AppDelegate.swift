@@ -1,6 +1,6 @@
 //
 //  AppDelegate.swift
-//  NeonSurvivor
+//  Polystrike
 //
 //  Created by Evan Airey on 9/8/26.
 //
@@ -37,4 +37,3 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 
 }
-
