@@ -1277,8 +1277,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             if isArrowHive {
                 let lastAttacked = enemy.userData?["lastHiveAttacked"] as? Double ?? elapsed
                 let lastLaunch = enemy.userData?["lastHiveLaunch"] as? Double ?? elapsed
-                if elapsed - lastAttacked >= 6.5, elapsed - lastLaunch >= 5.5 {
-                    launchHiveVolleyIfReady(from: enemy, minimumCooldown: 5.5)
+                if elapsed - lastAttacked >= 8.5, elapsed - lastLaunch >= 10.0 {
+                    launchHiveVolleyIfReady(from: enemy, minimumCooldown: 10.0)
                 }
             }
             let movementScale: CGFloat = isArrowHive ? 0 : (isFinalBoss ? 0.32 : (canShoot ? 0.25 : 1))
@@ -1913,7 +1913,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
                elapsed >= dashUntil,
                elapsed >= invincibleUntil {
                 lastDamageTime = gameTime
-                player.health -= 9 * progression.damageMultiplier
+                let projectileDamage: CGFloat = shot.name == "hiveMissile" ? 5 : 9
+                player.health -= projectileDamage * progression.damageMultiplier
                 createPlayerDamageEffect()
                 updateHUD()
                 if player.health <= 0 { endGame() }
@@ -2019,7 +2020,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         if enemy.health > 0,
            enemy.userData?["arrowHive"] as? Bool == true {
             enemy.userData?["lastHiveAttacked"] = elapsed
-            launchHiveVolleyIfReady(from: enemy, minimumCooldown: 1.8)
+            launchHiveVolleyIfReady(from: enemy, minimumCooldown: 3.8)
         }
 
         if enemy.health <= 0 {
@@ -2135,7 +2136,12 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         animateScoreChange()
 
         let isSentinel = enemy.userData?["sentinel"] as? Bool == true
-        createPickup(at: position, value: isSentinel ? 400 + currentTier.number * 100 : max(15, earnedScore / 4))
+        let fluxValue = isSentinel ? 400 + currentTier.number * 100 : max(15, earnedScore / 4)
+        if isSentinel {
+            createBossFluxBurst(at: position, value: fluxValue)
+        } else {
+            createPickup(at: position, value: fluxValue)
+        }
         maybeDropPowerUp(at: position, defeatedSentinel: isSentinel)
 
         createExplosion(
@@ -4222,6 +4228,32 @@ private extension GameScene {
         worldNode.addChild(coin)
         coin.run(.sequence([.wait(forDuration: 25), .fadeOut(withDuration: 3), .removeFromParent()]))
     }
+
+    func createBossFluxBurst(at point: CGPoint, value: Int) {
+        let count = 20
+        for index in 0..<count {
+            // One shard carries the complete existing reward. The surrounding
+            // shards sell the jackpot visually without changing the economy.
+            let pickup = FluxPickup(value: index == 0 ? value : 0)
+            let angle = CGFloat(index) * (.pi * 2 / CGFloat(count)) + CGFloat.random(in: -0.10...0.10)
+            let startRadius = CGFloat.random(in: 10...22)
+            pickup.position = CGPoint(x: point.x + cos(angle) * startRadius,
+                                      y: point.y + sin(angle) * startRadius)
+            pickup.setScale(index == 0 ? 1.18 : CGFloat.random(in: 0.62...0.92))
+            worldNode.addChild(pickup)
+
+            let distance = CGFloat.random(in: 44...96)
+            let scatter = SKAction.moveBy(x: cos(angle) * distance, y: sin(angle) * distance,
+                                          duration: Double.random(in: 0.28...0.48))
+            scatter.timingMode = .easeOut
+            pickup.run(.sequence([
+                scatter,
+                .wait(forDuration: 24.5),
+                .fadeOut(withDuration: 3),
+                .removeFromParent()
+            ]))
+        }
+    }
     func updatePickups(deltaTime: TimeInterval) {
         for coin in worldNode.children where coin.name == "fluxPickup" || coin.name == "powerUpPickup" {
             let dx = player.position.x - coin.position.x, dy = player.position.y - coin.position.y
@@ -4695,18 +4727,71 @@ final class PowerUpPickup: SKNode {
     }
 }
 
-final class FluxPickup: SKShapeNode {
+final class FluxPickup: SKNode {
     let value: Int
     init(value: Int) {
         self.value = max(0, value)
         super.init()
-        path = CGPath(roundedRect: CGRect(x: -6, y: -6, width: 12, height: 12), cornerWidth: 1, cornerHeight: 1, transform: nil)
         name = "fluxPickup"
-        zRotation = .pi / 4
-        fillColor = NeonColors.green
-        strokeColor = NeonColors.green
-        glowWidth = 2
         zPosition = 12
+
+        func diamondPath(width: CGFloat, height: CGFloat) -> CGPath {
+            let path = CGMutablePath()
+            path.move(to: CGPoint(x: 0, y: height / 2))
+            path.addLine(to: CGPoint(x: width / 2, y: 0))
+            path.addLine(to: CGPoint(x: 0, y: -height / 2))
+            path.addLine(to: CGPoint(x: -width / 2, y: 0))
+            path.closeSubpath()
+            return path
+        }
+
+        let halo = SKShapeNode(path: diamondPath(width: 15, height: 18))
+        halo.fillColor = NeonColors.green.withAlphaComponent(0.045)
+        halo.strokeColor = NeonColors.green.withAlphaComponent(0.24)
+        halo.lineWidth = 0.7
+        halo.glowWidth = 3
+        addChild(halo)
+
+        let outer = SKShapeNode(path: diamondPath(width: 10, height: 14))
+        outer.fillColor = NeonColors.green.withAlphaComponent(0.13)
+        outer.strokeColor = NeonColors.green
+        outer.lineWidth = 1.3
+        outer.glowWidth = 4
+        addChild(outer)
+
+        let inner = SKShapeNode(path: diamondPath(width: 5, height: 8))
+        inner.fillColor = .white
+        inner.strokeColor = NeonColors.green
+        inner.lineWidth = 1
+        inner.glowWidth = 5
+        addChild(inner)
+
+        let orbit = SKNode()
+        orbit.name = "fluxOrbit"
+        for index in 0..<4 {
+            let glint = SKShapeNode(path: diamondPath(width: 1.8, height: 2.6))
+            glint.zRotation = .pi / 4
+            glint.fillColor = index.isMultiple(of: 2) ? .white : NeonColors.green
+            glint.strokeColor = .clear
+            let angle = CGFloat(index) * .pi / 2
+            glint.position = CGPoint(x: cos(angle) * 7.5, y: sin(angle) * 8.5)
+            orbit.addChild(glint)
+        }
+        addChild(orbit)
+
+        outer.run(.repeatForever(.sequence([
+            .rotate(toAngle: 0.08, duration: 0.8),
+            .rotate(toAngle: -0.08, duration: 0.8)
+        ])))
+        orbit.run(.repeatForever(.rotate(byAngle: -.pi * 2, duration: 2.1)))
+        inner.run(.repeatForever(.sequence([
+            .group([.scale(to: 1.22, duration: 0.55), .fadeAlpha(to: 0.72, duration: 0.55)]),
+            .group([.scale(to: 0.88, duration: 0.55), .fadeAlpha(to: 1, duration: 0.55)])
+        ])))
+        halo.run(.repeatForever(.sequence([
+            .group([.scale(to: 1.22, duration: 0.8), .fadeAlpha(to: 0.35, duration: 0.8)]),
+            .group([.scale(to: 0.9, duration: 0.8), .fadeAlpha(to: 0.9, duration: 0.8)])
+        ])))
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 }

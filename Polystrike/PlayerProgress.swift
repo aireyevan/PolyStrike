@@ -154,7 +154,7 @@ class PlayerProgress {
         let steps = max(0, min(999, level - 1))
         // Deliberately paced beyond the first live-play calibration so early
         // levels remain meaningful and the century ranks stay aspirational.
-        return 2_174 * steps * steps + 10_216 * steps
+        return 3_900 * steps * steps + 18_328 * steps
     }
 
     static func level(forXP xp: Int) -> Int {
