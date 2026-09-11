@@ -16,14 +16,27 @@ final class StoreScene: SKScene {
         let progress = PlayerProgress.shared
         label(category == 3 ? "SHIP VAULT" : "SHIP ARMORY", at: CGPoint(x: size.width * 0.20, y: size.height - 39), font: 22, color: .cyan)
         label(category == 3 ? "COLLECT • EQUIP • DOMINATE" : "LOADOUT ENGINEERING / PERMANENT SYSTEMS", at: CGPoint(x: size.width * 0.20, y: size.height - 61), font: 8, color: NeonColors.mutedText)
+        let headerRail = SKShapeNode(rectOf: CGSize(width: size.width * 0.52, height: 1))
+        headerRail.position = CGPoint(x: size.width * 0.54, y: size.height - 61)
+        headerRail.fillColor = SKColor.cyan.withAlphaComponent(0.22)
+        headerRail.strokeColor = .clear
+        addChild(headerRail)
+        let headerMarker = SKShapeNode(rectOf: CGSize(width: 7, height: 7))
+        headerMarker.position = CGPoint(x: size.width * 0.28, y: size.height - 61)
+        headerMarker.zRotation = .pi / 4
+        headerMarker.fillColor = .cyan
+        headerMarker.strokeColor = .clear
+        addChild(headerMarker)
 
-        let wallet = SKShapeNode(rectOf: CGSize(width: 164, height: 34), cornerRadius: 9)
+        let wallet = SKShapeNode(rectOf: CGSize(width: 176, height: 34), cornerRadius: 2)
         wallet.position = CGPoint(x: size.width - 109, y: size.height - 43)
-        wallet.fillColor = NeonColors.green.withAlphaComponent(0.06)
+        wallet.fillColor = SKColor(red: 0.008, green: 0.025, blue: 0.022, alpha: 0.96)
         wallet.strokeColor = NeonColors.green.withAlphaComponent(0.45)
-        wallet.glowWidth = 2
+        wallet.lineWidth = 0.8
+        wallet.glowWidth = 0
         addChild(wallet)
         wallet.addChild(createNeonLabel(text: "◈  \(formatted(progress.flux)) FLUX", fontSize: 11, color: NeonColors.green))
+        addTechnicalCorners(to: wallet, size: CGSize(width: 176, height: 34), color: NeonColors.green)
 
         addPreview(progress: progress)
         addTabs()
@@ -38,12 +51,19 @@ final class StoreScene: SKScene {
     }
 
     private func addPreview(progress: PlayerProgress) {
-        let panel = SKShapeNode(rectOf: CGSize(width: size.width * 0.27, height: size.height * 0.57), cornerRadius: 14)
+        let panelSize = CGSize(width: size.width * 0.27, height: size.height * 0.57)
+        let panel = SKShapeNode(rectOf: panelSize, cornerRadius: 2)
         panel.position = CGPoint(x: size.width * 0.23, y: size.height * 0.49)
-        panel.fillColor = NeonColors.panel
+        panel.fillColor = SKColor(red: 0.007, green: 0.014, blue: 0.027, alpha: 0.97)
         panel.strokeColor = (category == 3 ? shipColor(previewShip) : .cyan).withAlphaComponent(0.35)
-        panel.glowWidth = 2
+        panel.lineWidth = 0.8
+        panel.glowWidth = 0
         addChild(panel)
+        addTechnicalCorners(to: panel, size: panelSize, color: category == 3 ? shipColor(previewShip) : .cyan)
+        let previewID = createNeonLabel(text: category == 3 ? "FRAME / \(String(format: "%02d", ShipStyle.allCases.firstIndex(of: previewShip)! + 1))" : "SYSTEM CORE / LIVE", fontSize: 7, color: NeonColors.mutedText)
+        previewID.horizontalAlignmentMode = .left
+        previewID.position = CGPoint(x: -panelSize.width / 2 + 12, y: panelSize.height / 2 - 15)
+        panel.addChild(previewID)
         for radius: CGFloat in [37, 54] {
             let ring = SKShapeNode(circleOfRadius: radius)
             ring.yScale = 0.62
@@ -76,14 +96,23 @@ final class StoreScene: SKScene {
     private func addTabs() {
         for (index, title) in ["WEAPONS", "DEFENSE", "UTILITY", "SHIPS"].enumerated() {
             let width = size.width * 0.122
-            let tab = SKShapeNode(rectOf: CGSize(width: width, height: 30), cornerRadius: 6)
+            let tab = SKShapeNode(rectOf: CGSize(width: width, height: 30), cornerRadius: 1)
             tab.name = "tab\(index)"
             tab.position = CGPoint(x: size.width * (0.493 + CGFloat(index) * 0.132), y: size.height - 78)
-            tab.fillColor = index == category ? SKColor.cyan.withAlphaComponent(0.12) : NeonColors.panel
-            tab.strokeColor = index == category ? .cyan : .clear
+            tab.fillColor = index == category ? SKColor.cyan.withAlphaComponent(0.07) : SKColor.black.withAlphaComponent(0.55)
+            tab.strokeColor = index == category ? .cyan : NeonColors.mutedText.withAlphaComponent(0.2)
+            tab.lineWidth = 0.7
             let glyph = ["✦", "⬡", "◇", "◆"][index]
             let titleLabel = createNeonLabel(text: "\(glyph) \(title)", fontSize: 8, color: index == category ? .cyan : NeonColors.mutedText)
             tab.addChild(titleLabel); addChild(tab)
+            if index == category {
+                let marker = SKShapeNode(rectOf: CGSize(width: 6, height: 6))
+                marker.position.x = -width / 2 + 9
+                marker.zRotation = .pi / 4
+                marker.fillColor = .cyan
+                marker.strokeColor = .clear
+                tab.addChild(marker)
+            }
             if index == category { tab.run(.repeatForever(.sequence([.fadeAlpha(to: 0.72, duration: 0.8), .fadeAlpha(to: 1, duration: 0.8)]))) }
         }
     }
@@ -93,12 +122,17 @@ final class StoreScene: SKScene {
         let step = min(65, (size.height - 133) / 4)
         for (index, upgrade) in groups[category].enumerated() {
             let level = progress.level(upgrade), maxed = level >= upgrade.cap
-            let card = SKShapeNode(rectOf: CGSize(width: width, height: step - 6), cornerRadius: 8)
+            let card = SKShapeNode(rectOf: CGSize(width: width, height: step - 6), cornerRadius: 2)
             card.name = "upgrade\(index)"
             card.position = CGPoint(x: size.width * 0.687, y: size.height - 124 - CGFloat(index) * step)
-            card.fillColor = NeonColors.panel
+            card.fillColor = SKColor(red: 0.008, green: 0.015, blue: 0.03, alpha: 0.96)
             card.strokeColor = maxed ? NeonColors.green.withAlphaComponent(0.35) : (progress.flux >= progress.cost(upgrade) ? .cyan.withAlphaComponent(0.6) : NeonColors.mutedText.withAlphaComponent(0.3))
             addChild(card)
+            let accent = SKShapeNode(rectOf: CGSize(width: 3, height: step - 16))
+            accent.position.x = -width / 2 + 5
+            accent.fillColor = maxed ? NeonColors.green : (progress.flux >= progress.cost(upgrade) ? .cyan : NeonColors.mutedText)
+            accent.strokeColor = .clear
+            card.addChild(accent)
             let heading = createNeonLabel(text: "\(upgrade.title)  \(level)/\(upgrade.cap)", fontSize: 10, color: .white)
             heading.horizontalAlignmentMode = .left; heading.position = CGPoint(x: -width / 2 + 12, y: 11); card.addChild(heading)
             let effect = createNeonLabel(text: maxed ? upgrade.effect(at: level) : upgrade.effect(at: level) + " → " + upgrade.effect(at: level + 1), fontSize: 9, color: NeonColors.mutedText)
@@ -107,24 +141,57 @@ final class StoreScene: SKScene {
             card.addChild(effect)
             let price = createNeonLabel(text: maxed ? "MAX" : "◈ \(progress.cost(upgrade))", fontSize: 10, color: NeonColors.green)
             price.horizontalAlignmentMode = .right; price.position = CGPoint(x: width / 2 - 12, y: -10); card.addChild(price)
+            let progressWidth = width - 24
+            let track = SKShapeNode(rectOf: CGSize(width: progressWidth, height: 1))
+            track.position = CGPoint(x: 0, y: -(step - 6) / 2 + 5)
+            track.fillColor = SKColor.white.withAlphaComponent(0.08)
+            track.strokeColor = .clear
+            card.addChild(track)
+            let ratio = CGFloat(level) / CGFloat(max(1, upgrade.cap))
+            let fillWidth = max(1, progressWidth * ratio)
+            let fill = SKShapeNode(rectOf: CGSize(width: fillWidth, height: 1.5))
+            fill.position.x = -progressWidth / 2 + fillWidth / 2
+            fill.fillColor = maxed ? NeonColors.green : .cyan
+            fill.strokeColor = .clear
+            track.addChild(fill)
         }
     }
 
     private func addShipCards(progress: PlayerProgress) {
         let styles = ShipStyle.allCases
-        let cardWidth = size.width * 0.245
-        let cardHeight = min(70, (size.height - 130) / 3 - 5)
+        // Keep the complete vault grid inside the space between the tabs and
+        // footer controls. The previous percentage positions let the final row
+        // drift into the bottom navigation on shorter iPhones.
+        let contentLeft = size.width * 0.425
+        let contentRight = size.width * 0.955
+        let columnGap = max(8, size.width * 0.012)
+        let cardWidth = (contentRight - contentLeft - columnGap) / 2
+        let contentTop = size.height - 101
+        let contentBottom = max(82, size.height * 0.205)
+        let rowGap: CGFloat = 7
+        let cardHeight = min(70, (contentTop - contentBottom - rowGap * 2) / 3)
+        let firstCenterY = contentTop - cardHeight / 2
         for (index, style) in styles.enumerated() {
             let row = index / 2, column = index % 2
             let selected = previewShip == style
             let owned = progress.owns(style)
-            let card = SKShapeNode(rectOf: CGSize(width: cardWidth, height: cardHeight), cornerRadius: 9)
+            let card = SKShapeNode(rectOf: CGSize(width: cardWidth, height: cardHeight), cornerRadius: 2)
             card.name = "ship\(index)"
-            card.position = CGPoint(x: size.width * (column == 0 ? 0.555 : 0.815), y: size.height - 123 - CGFloat(row) * (cardHeight + 7))
-            card.fillColor = selected ? shipColor(style).withAlphaComponent(0.12) : NeonColors.panel
+            card.position = CGPoint(
+                x: contentLeft + cardWidth / 2 + CGFloat(column) * (cardWidth + columnGap),
+                y: firstCenterY - CGFloat(row) * (cardHeight + rowGap)
+            )
+            card.fillColor = selected ? shipColor(style).withAlphaComponent(0.08) : SKColor(red: 0.008, green: 0.015, blue: 0.03, alpha: 0.96)
             card.strokeColor = selected ? shipColor(style) : (owned ? NeonColors.green.withAlphaComponent(0.5) : NeonColors.mutedText.withAlphaComponent(0.28))
-            card.glowWidth = selected ? 3 : 0
+            card.lineWidth = selected ? 1.2 : 0.7
+            card.glowWidth = selected ? 1 : 0
             addChild(card)
+            let selector = SKShapeNode(rectOf: CGSize(width: 6, height: 6))
+            selector.position = CGPoint(x: -cardWidth / 2 + 9, y: cardHeight / 2 - 9)
+            selector.zRotation = .pi / 4
+            selector.fillColor = selected ? shipColor(style) : NeonColors.mutedText.withAlphaComponent(0.35)
+            selector.strokeColor = .clear
+            card.addChild(selector)
             let miniature = Player(style: style); miniature.physicsBody = nil; miniature.setScale(0.52)
             miniature.position = CGPoint(x: -cardWidth / 2 + 28, y: 1); card.addChild(miniature)
             let title = createNeonLabel(text: style.title, fontSize: 8, color: owned ? .white : shipColor(style))
@@ -141,6 +208,24 @@ final class StoreScene: SKScene {
     private func label(_ text: String, at position: CGPoint, font: CGFloat, color: SKColor) {
         let node = createNeonLabel(text: text, fontSize: font, color: color)
         node.position = position; addChild(node)
+    }
+
+    private func addTechnicalCorners(to node: SKNode, size: CGSize, color: SKColor) {
+        let length: CGFloat = 11
+        for x: CGFloat in [-1, 1] {
+            for y: CGFloat in [-1, 1] {
+                let path = CGMutablePath()
+                let corner = CGPoint(x: x * size.width / 2, y: y * size.height / 2)
+                path.move(to: CGPoint(x: corner.x - x * length, y: corner.y))
+                path.addLine(to: corner)
+                path.addLine(to: CGPoint(x: corner.x, y: corner.y - y * length))
+                let bracket = SKShapeNode(path: path)
+                bracket.strokeColor = color.withAlphaComponent(0.85)
+                bracket.lineWidth = 1.2
+                bracket.glowWidth = 1
+                node.addChild(bracket)
+            }
+        }
     }
 
     private func formatted(_ amount: Int) -> String {

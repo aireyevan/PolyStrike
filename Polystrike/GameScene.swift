@@ -3895,8 +3895,12 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
                 continue
             }
 
-            if pausedRun { resumeRun(); continue }
             let tappedNames = cameraNode.nodes(at: location).compactMap { $0.name ?? $0.parent?.name }
+            if pausedRun {
+                if tappedNames.contains("pauseResume") { resumeRun() }
+                if tappedNames.contains("pauseMainMenu") { returnToMainMenu() }
+                continue
+            }
             if tappedNames.contains("dashAbility") { activateDash(); continue }
             if tappedNames.contains("bombAbility") { activateBomb(); continue }
             if cameraNode.nodes(at: location).contains(where: { $0.name == "pauseRun" }) {
@@ -4042,9 +4046,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
         isTransitioning = true
 
-        mainMenuButton.removeAction(
-            forKey: "buttonPulse"
-        )
+        mainMenuButton?.removeAction(forKey: "buttonPulse")
 
         let menu =
             MainMenuScene(
@@ -4244,11 +4246,66 @@ private extension GameScene {
         moveJoystick.end(); aimJoystick.end()
         moveJoystick.alpha = 0; aimJoystick.alpha = 0
         let shade = SKShapeNode(rectOf: size)
-        shade.fillColor = SKColor.black.withAlphaComponent(0.8)
+        shade.fillColor = SKColor.black.withAlphaComponent(0.88)
         shade.strokeColor = .clear
         shade.zPosition = 850
-        let label = makeLabel(text: "PAUSED • TAP TO RESUME", fontSize: 20, fontName: "AvenirNext-Bold", color: .cyan)
-        shade.addChild(label)
+
+        let frameWidth = min(size.width * 0.56, 440)
+        let frameHeight = min(size.height * 0.72, 270)
+        let frame = SKShapeNode(rectOf: CGSize(width: frameWidth, height: frameHeight), cornerRadius: 2)
+        frame.fillColor = NeonColors.panel.withAlphaComponent(0.96)
+        frame.strokeColor = SKColor.cyan.withAlphaComponent(0.55)
+        frame.lineWidth = 1
+        shade.addChild(frame)
+
+        let rail = SKShapeNode(rectOf: CGSize(width: frameWidth - 24, height: 1))
+        rail.fillColor = NeonColors.purple.withAlphaComponent(0.8)
+        rail.strokeColor = .clear
+        rail.position.y = frameHeight * 0.27
+        frame.addChild(rail)
+
+        let marker = SKShapeNode(rectOf: CGSize(width: 7, height: 7))
+        marker.zRotation = .pi / 4
+        marker.fillColor = .cyan
+        marker.strokeColor = .clear
+        marker.position = CGPoint(x: -frameWidth / 2 + 18, y: frameHeight / 2 - 18)
+        frame.addChild(marker)
+
+        let eyebrow = makeLabel(text: "RUN CONTROL / SUSPENDED", fontSize: 8, fontName: "AvenirNext-DemiBold", color: NeonColors.mutedText)
+        eyebrow.horizontalAlignmentMode = .left
+        eyebrow.position = CGPoint(x: -frameWidth / 2 + 32, y: frameHeight / 2 - 22)
+        frame.addChild(eyebrow)
+        let title = makeLabel(text: "PAUSED", fontSize: 27, fontName: "AvenirNext-DemiBold", color: .white)
+        title.position.y = frameHeight * 0.34
+        frame.addChild(title)
+
+        func addPauseButton(_ title: String, name: String, y: CGFloat, color: SKColor) {
+            let button = SKShapeNode(rectOf: CGSize(width: frameWidth - 48, height: 46), cornerRadius: 2)
+            button.name = name
+            button.position.y = y
+            button.fillColor = color.withAlphaComponent(0.065)
+            button.strokeColor = color.withAlphaComponent(0.75)
+            button.lineWidth = 1
+            frame.addChild(button)
+            let diamond = SKShapeNode(rectOf: CGSize(width: 7, height: 7))
+            diamond.name = name
+            diamond.zRotation = .pi / 4
+            diamond.fillColor = color
+            diamond.strokeColor = .clear
+            diamond.position.x = -frameWidth / 2 + 42
+            button.addChild(diamond)
+            let text = makeLabel(text: title, fontSize: 12, fontName: "AvenirNext-DemiBold", color: .white)
+            text.name = name
+            text.horizontalAlignmentMode = .left
+            text.position = CGPoint(x: -frameWidth / 2 + 60, y: -4)
+            button.addChild(text)
+        }
+        addPauseButton("RESUME RUN", name: "pauseResume", y: 8, color: .cyan)
+        addPauseButton("RETURN TO MAIN MENU", name: "pauseMainMenu", y: -52, color: NeonColors.purple)
+
+        let footer = makeLabel(text: "RETURNING TO MENU ENDS THE CURRENT RUN", fontSize: 7, fontName: "AvenirNext-DemiBold", color: NeonColors.mutedText)
+        footer.position.y = -frameHeight / 2 + 17
+        frame.addChild(footer)
         cameraNode.addChild(shade)
         pausePanel = shade
     }

@@ -111,11 +111,8 @@ func createNeonBackground(
 
         let line = SKShapeNode()
         line.path = path
-        line.strokeColor = SKColor(
-            white: 0.2,
-            alpha: 0.08
-        )
-        line.lineWidth = 1
+        line.strokeColor = SKColor(white: 0.34, alpha: 0.055)
+        line.lineWidth = 0.55
         line.zPosition = -20
 
         scene.addChild(line)
@@ -145,11 +142,8 @@ func createNeonBackground(
 
         let line = SKShapeNode()
         line.path = path
-        line.strokeColor = SKColor(
-            white: 0.2,
-            alpha: 0.08
-        )
-        line.lineWidth = 1
+        line.strokeColor = SKColor(white: 0.34, alpha: 0.055)
+        line.lineWidth = 0.55
         line.zPosition = -20
 
         scene.addChild(line)
@@ -180,6 +174,24 @@ func createNeonBackground(
     glow.zPosition = -19
 
     scene.addChild(glow)
+
+    // Sparse triangular circuitry breaks up the grid without turning menus
+    // into a second gameplay scene.
+    let facets = CGMutablePath()
+    let step = gridSpacing * 2
+    for x in stride(from: -step, through: scene.size.width + step, by: step) {
+        let offset = Int(x / step).isMultiple(of: 2) ? CGFloat(0) : gridSpacing
+        for y in stride(from: offset, through: scene.size.height, by: step) {
+            facets.move(to: CGPoint(x: x, y: y))
+            facets.addLine(to: CGPoint(x: x + gridSpacing, y: y + gridSpacing))
+            facets.addLine(to: CGPoint(x: x + step, y: y))
+        }
+    }
+    let facetLines = SKShapeNode(path: facets)
+    facetLines.strokeColor = NeonColors.purple.withAlphaComponent(0.055)
+    facetLines.lineWidth = 0.5
+    facetLines.zPosition = -18
+    scene.addChild(facetLines)
 
     let pulse = SKAction.sequence([
         SKAction.fadeAlpha(
@@ -250,10 +262,7 @@ class NeonButton: SKNode {
         self.buttonSize = size
         self.accentColor = color
 
-        background = SKShapeNode(
-            rectOf: size,
-            cornerRadius: 12
-        )
+        background = SKShapeNode(rectOf: size, cornerRadius: 2)
 
         titleLabel = SKLabelNode(
             fontNamed: "AvenirNext-Bold"
@@ -261,23 +270,41 @@ class NeonButton: SKNode {
 
         super.init()
 
-        background.fillColor = NeonColors.panel
-        background.strokeColor = color
-        background.lineWidth = 2
-        background.glowWidth = 5
+        background.fillColor = SKColor(red: 0.008, green: 0.014, blue: 0.028, alpha: 0.96)
+        background.strokeColor = color.withAlphaComponent(0.68)
+        background.lineWidth = 0.9
+        background.glowWidth = 1
 
         titleLabel.text = title
         titleLabel.fontSize = 20
         titleLabel.fontColor = NeonColors.text
 
-        titleLabel.horizontalAlignmentMode = .center
+        titleLabel.horizontalAlignmentMode = .left
         titleLabel.verticalAlignmentMode = .center
+        titleLabel.position.x = -size.width / 2 + 30
 
         background.zPosition = 0
         titleLabel.zPosition = 1
 
         addChild(background)
         addChild(titleLabel)
+
+        let selector = SKShapeNode(rectOf: CGSize(width: 7, height: 7), cornerRadius: 0.5)
+        selector.zRotation = .pi / 4
+        selector.position.x = -size.width / 2 + 15
+        selector.fillColor = color
+        selector.strokeColor = .white
+        selector.lineWidth = 0.5
+        selector.glowWidth = 3
+        selector.zPosition = 2
+        addChild(selector)
+
+        let terminal = SKShapeNode(rectOf: CGSize(width: 22, height: 1))
+        terminal.position.x = size.width / 2 - 18
+        terminal.fillColor = color.withAlphaComponent(0.65)
+        terminal.strokeColor = .clear
+        terminal.zPosition = 2
+        addChild(terminal)
 
         name = "neonButton"
     }
@@ -317,15 +344,12 @@ func createNeonPanel(
     color: SKColor
 ) -> SKShapeNode {
 
-    let panel = SKShapeNode(
-        rectOf: size,
-        cornerRadius: 14
-    )
+    let panel = SKShapeNode(rectOf: size, cornerRadius: 2)
 
     panel.fillColor = NeonColors.panel
     panel.strokeColor = color
-    panel.lineWidth = 1.5
-    panel.glowWidth = 3
+    panel.lineWidth = 0.8
+    panel.glowWidth = 0
 
     return panel
 }
@@ -339,7 +363,7 @@ func createNeonLabel(
 ) -> SKLabelNode {
 
     let label = SKLabelNode(
-        fontNamed: "AvenirNext-Bold"
+        fontNamed: "AvenirNext-DemiBold"
     )
 
     label.text = text
