@@ -30,6 +30,12 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private let coinLabel = SKLabelNode(fontNamed: "AvenirNext-DemiBold")
     private var pausedRun = false
     private var pausePanel: SKNode?
+    private var runEnemiesKilled = 0
+    private var runTiersCompleted = 0
+    private var powerUpsDroppedThisTier = 0
+    private var invincibleUntil: TimeInterval = 0
+    private var electricUntil: TimeInterval = 0
+    private let powerUpHUD = SKNode()
     // MARK: - Physics Categories
 
     private let playerCategory: UInt32 = 1 << 0
@@ -199,6 +205,11 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         gameTime = 0
         lastSpawnTime = 0
         lastDamageTime = -10
+        runEnemiesKilled = 0
+        runTiersCompleted = 0
+        powerUpsDroppedThisTier = 0
+        invincibleUntil = 0
+        electricUntil = 0
 
         joystickVisibilityTimer = 0
         joysticksHidden = false
@@ -226,6 +237,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         createHUD()
         createJoysticks()
         styleHUD()
+        createPowerUpHUD()
         createAbilityButtons()
         arenaStatus.fontSize = 9
         arenaStatus.position = CGPoint(x: 0, y: size.height / 2 - currentSafeAreaInsets().top - 63)
@@ -935,6 +947,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         frameDelta = deltaTime
         elapsed += deltaTime
         updateAbilities(deltaTime: deltaTime)
+        updatePowerUpEffects()
         updateLivingArena(deltaTime: deltaTime)
         navigationClock += deltaTime
         if navigationClock >= 0.25 {
@@ -1415,7 +1428,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func fireBullet(
-        direction: CGVector
+        direction: CGVector,
+        showsMuzzleFlash: Bool = true
     ) {
 
         let bullet = Bullet(
@@ -1491,9 +1505,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             ])
         )
 
-        createMuzzleFlash(
-            direction: normalized
-        )
+        if showsMuzzleFlash {
+            createMuzzleFlash(direction: normalized)
+        }
     }
 
     private func normalize(
@@ -1892,7 +1906,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             let shotBody = contact.bodyA.categoryBitMask == 16 ? contact.bodyA : contact.bodyB
             guard let shot = shotBody.node, shot.parent != nil else { return }
             shot.removeFromParent()
-            if categories == (16 | playerCategory), gameTime - lastDamageTime >= damageCooldown, elapsed >= dashUntil {
+            if categories == (16 | playerCategory),
+               gameTime - lastDamageTime >= damageCooldown,
+               elapsed >= dashUntil,
+               elapsed >= invincibleUntil {
                 lastDamageTime = gameTime
                 player.health -= 9 * progression.damageMultiplier
                 createPlayerDamageEffect()
@@ -1968,6 +1985,22 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
         guard let enemy =
             enemyBody.node as? Enemy else {
+            return
+        }
+
+        if elapsed < electricUntil {
+            createElectricStrike(on: enemy)
+            if enemy.userData?["sentinel"] as? Bool == true {
+                enemy.health -= max(90, enemy.maxHealth * 0.16)
+                if enemy.health <= 0 { destroyEnemy(enemy) }
+            } else {
+                destroyEnemy(enemy)
+            }
+            return
+        }
+
+        guard elapsed >= invincibleUntil else {
+            createShieldImpact(at: enemy.position)
             return
         }
 
@@ -2088,6 +2121,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         }
 
         score += earnedScore
+        runEnemiesKilled += 1
+        if let newRank = progression.addXP(earnedScore) {
+            showRankUp(level: newRank)
+        }
 
         updateHUD()
 
@@ -2095,6 +2132,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
         let isSentinel = enemy.userData?["sentinel"] as? Bool == true
         createPickup(at: position, value: isSentinel ? 400 + currentTier.number * 100 : max(15, earnedScore / 4))
+        maybeDropPowerUp(at: position, defeatedSentinel: isSentinel)
 
         createExplosion(
             at: position
@@ -2581,6 +2619,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         wavePlan = TierWavePlan.forTier(tier)
         regularEnemiesRemaining = wavePlan.regularEnemies
         bossesRemaining = wavePlan.bossCount
+        powerUpsDroppedThisTier = 0
         lastSpawnTime = gameTime - spawnInterval
     }
 
@@ -2594,6 +2633,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func advanceTierAfterClear() {
+        runTiersCompleted += 1
         let newTier = GameTier.tier(number: currentTier.number + 1)
         currentTier = newTier
 
@@ -3533,6 +3573,11 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         }
 
         gameOver = true
+        progression.recordRun(duration: elapsed,
+                              enemiesKilled: runEnemiesKilled,
+                              tiersCompleted: runTiersCompleted,
+                              highestTier: currentTier.number,
+                              score: score)
         UserDefaults.standard.set(max(score, UserDefaults.standard.integer(forKey: "polystrikeBestScore")), forKey: "polystrikeBestScore")
         worldNode.isPaused = true
 
@@ -3700,7 +3745,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
         pointsEarnedLabel =
             makeLabel(
-                text: "\(runCoins) FLUX BANKED • BEST \(UserDefaults.standard.integer(forKey: "polystrikeBestScore"))",
+                text: "\(runCoins) FLUX BANKED • LEVEL \(progression.rankLevel) • BEST \(UserDefaults.standard.integer(forKey: "polystrikeBestScore"))",
                 fontSize: 11,
                 fontName: "AvenirNext-Bold",
                 color: .yellow
@@ -4172,12 +4217,14 @@ private extension GameScene {
         coin.run(.sequence([.wait(forDuration: 25), .fadeOut(withDuration: 3), .removeFromParent()]))
     }
     func updatePickups(deltaTime: TimeInterval) {
-        for coin in worldNode.children where coin.name == "fluxPickup" {
+        for coin in worldNode.children where coin.name == "fluxPickup" || coin.name == "powerUpPickup" {
             let dx = player.position.x - coin.position.x, dy = player.position.y - coin.position.y
             let distance = hypot(dx, dy)
-            if distance < 25 {
+            if distance < (coin is PowerUpPickup ? 34 : 25) {
                 if let pickup = coin as? FluxPickup { collectPickup(pickup) }
-            } else if distance < progression.magnetRange && clearPath(from: coin.position, to: player.position) {
+                if let pickup = coin as? PowerUpPickup { collectPowerUp(pickup) }
+            } else if distance < (coin is PowerUpPickup ? 105 : progression.magnetRange),
+                      clearPath(from: coin.position, to: player.position) {
                 let step = min(distance, CGFloat(deltaTime) * 420)
                 coin.position.x += dx / distance * step
                 coin.position.y += dy / distance * step
@@ -4489,6 +4536,104 @@ private extension GameScene {
 }
 
 
+enum PowerUpKind: CaseIterable {
+    case fullHealth
+    case invincibility
+    case radialBarrage
+    case electricity
+
+    var title: String {
+        switch self {
+        case .fullHealth: return "FULL REPAIR"
+        case .invincibility: return "INVINCIBLE"
+        case .radialBarrage: return "NOVA BURST"
+        case .electricity: return "VOLT SHIELD"
+        }
+    }
+
+    var glyph: String {
+        switch self {
+        case .fullHealth: return "+"
+        case .invincibility: return "◇"
+        case .radialBarrage: return "✦"
+        case .electricity: return "ϟ"
+        }
+    }
+
+    var color: SKColor {
+        switch self {
+        case .fullHealth: return NeonColors.green
+        case .invincibility: return .cyan
+        case .radialBarrage: return NeonColors.orange
+        case .electricity: return NeonColors.purple
+        }
+    }
+}
+
+final class PowerUpPickup: SKNode {
+    let kind: PowerUpKind
+
+    init(kind: PowerUpKind) {
+        self.kind = kind
+        super.init()
+        name = "powerUpPickup"
+        zPosition = 18
+
+        let halo = SKShapeNode(circleOfRadius: 25)
+        halo.name = "pickupHalo"
+        halo.fillColor = kind.color.withAlphaComponent(0.08)
+        halo.strokeColor = kind.color.withAlphaComponent(0.78)
+        halo.lineWidth = 2
+        halo.glowWidth = 8
+        addChild(halo)
+        halo.run(.repeatForever(.sequence([
+            .group([.scale(to: 1.22, duration: 0.55), .fadeAlpha(to: 0.35, duration: 0.55)]),
+            .group([.scale(to: 0.92, duration: 0.55), .fadeAlpha(to: 1, duration: 0.55)])
+        ])))
+
+        let core = SKShapeNode(path: Self.hexagon(radius: 15))
+        core.fillColor = SKColor(red: 0.02, green: 0.035, blue: 0.07, alpha: 0.96)
+        core.strokeColor = kind.color
+        core.lineWidth = 2.5
+        core.glowWidth = 7
+        addChild(core)
+        core.run(.repeatForever(.rotate(byAngle: .pi * 2, duration: 5.5)))
+
+        let glyph = SKLabelNode(fontNamed: "AvenirNext-Heavy")
+        glyph.text = kind.glyph
+        glyph.fontSize = 21
+        glyph.fontColor = .white
+        glyph.verticalAlignmentMode = .center
+        glyph.horizontalAlignmentMode = .center
+        glyph.zPosition = 2
+        addChild(glyph)
+
+        for index in 0..<4 {
+            let spark = SKShapeNode(circleOfRadius: 1.8)
+            spark.fillColor = .white
+            spark.strokeColor = kind.color
+            spark.glowWidth = 4
+            spark.position = CGPoint(x: cos(CGFloat(index) * .pi / 2) * 30,
+                                     y: sin(CGFloat(index) * .pi / 2) * 30)
+            halo.addChild(spark)
+        }
+        halo.run(.repeatForever(.rotate(byAngle: -.pi * 2, duration: 3.2)), withKey: "orbit")
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    private static func hexagon(radius: CGFloat) -> CGPath {
+        let path = CGMutablePath()
+        for index in 0..<6 {
+            let angle = CGFloat(index) * .pi / 3
+            let point = CGPoint(x: cos(angle) * radius, y: sin(angle) * radius)
+            if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+        }
+        path.closeSubpath()
+        return path
+    }
+}
+
 final class FluxPickup: SKShapeNode {
     let value: Int
     init(value: Int) {
@@ -4514,6 +4659,265 @@ extension GameScene {
         runCoins += reward
         progression.addPoints(reward)
         coinLabel.text = "\(runCoins)"
+    }
+
+    func maybeDropPowerUp(at position: CGPoint, defeatedSentinel: Bool) {
+        let cap = currentTier.number >= 15 ? 3 : (currentTier.number >= 6 ? 2 : 1)
+        guard powerUpsDroppedThisTier < cap else { return }
+        let activeDrops = worldNode.children.filter { $0 is PowerUpPickup }.count
+        guard activeDrops < 2 else { return }
+        let baseChance = min(0.035, 0.012 + Double(max(0, currentTier.number - 1)) * 0.0012)
+        let chance = defeatedSentinel ? min(0.09, baseChance * 2.2) : baseChance
+        guard Double.random(in: 0..<1) < chance,
+              let kind = PowerUpKind.allCases.randomElement() else { return }
+
+        powerUpsDroppedThisTier += 1
+        let pickup = PowerUpPickup(kind: kind)
+        pickup.position = position
+        pickup.setScale(0.05)
+        worldNode.addChild(pickup)
+        pickup.run(.sequence([
+            .group([.scale(to: 1.18, duration: 0.18), .rotate(byAngle: .pi, duration: 0.18)]),
+            .scale(to: 1, duration: 0.10),
+            .wait(forDuration: 14),
+            .sequence([.repeat(.sequence([.fadeAlpha(to: 0.2, duration: 0.15), .fadeAlpha(to: 1, duration: 0.15)]), count: 6)]),
+            .fadeOut(withDuration: 0.5),
+            .removeFromParent()
+        ]))
+        createPowerUpDropBeacon(at: position, color: kind.color)
+    }
+
+    func collectPowerUp(_ pickup: PowerUpPickup) {
+        guard pickup.parent != nil else { return }
+        let kind = pickup.kind
+        let position = pickup.position
+        pickup.removeAllActions()
+        pickup.removeFromParent()
+        createPowerUpCollectBurst(at: position, color: kind.color)
+        showPowerUpAnnouncement(kind)
+
+        switch kind {
+        case .fullHealth:
+            player.health = player.maxHealth
+            updateHUD()
+            animateFullRepair()
+        case .invincibility:
+            invincibleUntil = max(invincibleUntil, elapsed) + 10
+            installInvincibilityAura()
+        case .radialBarrage:
+            fireTripleRadialBarrage()
+        case .electricity:
+            electricUntil = max(electricUntil, elapsed) + 12
+            installElectricAura()
+        }
+        refreshPowerUpHUD()
+    }
+
+    func createPowerUpHUD() {
+        powerUpHUD.name = "powerUpHUD"
+        powerUpHUD.zPosition = hudZ + 4
+        let insets = currentSafeAreaInsets()
+        powerUpHUD.position = CGPoint(x: 0, y: size.height / 2 - insets.top - 70)
+        cameraNode.addChild(powerUpHUD)
+    }
+
+    func updatePowerUpEffects() {
+        if elapsed >= invincibleUntil {
+            player.childNode(withName: "invincibilityAura")?.removeFromParent()
+        }
+        if elapsed >= electricUntil {
+            player.childNode(withName: "electricAura")?.removeFromParent()
+        }
+        refreshPowerUpHUD()
+    }
+
+    func refreshPowerUpHUD() {
+        guard powerUpHUD.parent != nil else { return }
+        powerUpHUD.removeAllChildren()
+        var effects: [(String, TimeInterval, SKColor)] = []
+        if elapsed < invincibleUntil { effects.append(("◇  INVINCIBLE", invincibleUntil - elapsed, .cyan)) }
+        if elapsed < electricUntil { effects.append(("ϟ  VOLT SHIELD", electricUntil - elapsed, NeonColors.purple)) }
+        let width: CGFloat = 126
+        for (index, effect) in effects.enumerated() {
+            let panel = SKShapeNode(rectOf: CGSize(width: width, height: 25), cornerRadius: 8)
+            panel.position.x = (CGFloat(index) - CGFloat(effects.count - 1) / 2) * (width + 8)
+            panel.fillColor = SKColor(red: 0.015, green: 0.025, blue: 0.06, alpha: 0.88)
+            panel.strokeColor = effect.2
+            panel.lineWidth = 1.4
+            panel.glowWidth = 3
+            let label = makeLabel(text: "\(effect.0)  \(Int(ceil(effect.1)))s", fontSize: 9,
+                                  fontName: "AvenirNext-Bold", color: .white)
+            panel.addChild(label)
+            powerUpHUD.addChild(panel)
+        }
+    }
+
+    func fireTripleRadialBarrage() {
+        var actions: [SKAction] = []
+        for wave in 0..<3 {
+            if wave > 0 { actions.append(.wait(forDuration: 0.34)) }
+            actions.append(.run { [weak self] in self?.fireRadialRing(wave: wave) })
+        }
+        run(.sequence(actions), withKey: "powerUpBarrage")
+    }
+
+    func fireRadialRing(wave: Int) {
+        let count = 24
+        let phase = CGFloat(wave) * .pi / CGFloat(count)
+        for index in 0..<count {
+            let angle = CGFloat(index) * .pi * 2 / CGFloat(count) + phase
+            fireBullet(direction: CGVector(dx: cos(angle), dy: sin(angle)), showsMuzzleFlash: false)
+        }
+        let ring = SKShapeNode(circleOfRadius: 30)
+        ring.position = player.position
+        ring.fillColor = .clear
+        ring.strokeColor = .white
+        ring.lineWidth = 3
+        ring.glowWidth = 8
+        ring.zPosition = effectZ
+        worldNode.addChild(ring)
+        ring.run(.sequence([.group([.scale(to: 2.6, duration: 0.25), .fadeOut(withDuration: 0.25)]), .removeFromParent()]))
+    }
+
+    func installInvincibilityAura() {
+        guard player.childNode(withName: "invincibilityAura") == nil else { return }
+        let aura = SKNode()
+        aura.name = "invincibilityAura"
+        for radius in [CGFloat(29), 36] {
+            let ring = SKShapeNode(circleOfRadius: radius)
+            ring.fillColor = .cyan.withAlphaComponent(0.04)
+            ring.strokeColor = .cyan.withAlphaComponent(radius == 29 ? 0.95 : 0.48)
+            ring.lineWidth = radius == 29 ? 2.5 : 1.2
+            ring.glowWidth = 7
+            aura.addChild(ring)
+            ring.run(.repeatForever(.sequence([.scale(to: 1.10, duration: 0.32), .scale(to: 0.92, duration: 0.32)])))
+        }
+        player.addChild(aura)
+        aura.run(.repeatForever(.rotate(byAngle: .pi * 2, duration: 2.8)))
+    }
+
+    func installElectricAura() {
+        guard player.childNode(withName: "electricAura") == nil else { return }
+        let aura = SKNode()
+        aura.name = "electricAura"
+        let ring = SKShapeNode(circleOfRadius: 34)
+        ring.fillColor = NeonColors.purple.withAlphaComponent(0.06)
+        ring.strokeColor = NeonColors.purple
+        ring.lineWidth = 2
+        ring.glowWidth = 8
+        aura.addChild(ring)
+        for index in 0..<8 {
+            let spark = SKShapeNode(rectOf: CGSize(width: 8, height: 2), cornerRadius: 1)
+            let angle = CGFloat(index) * .pi / 4
+            spark.position = CGPoint(x: cos(angle) * 35, y: sin(angle) * 35)
+            spark.zRotation = angle
+            spark.fillColor = .white
+            spark.strokeColor = NeonColors.purple
+            spark.glowWidth = 5
+            aura.addChild(spark)
+        }
+        player.addChild(aura)
+        aura.run(.repeatForever(.rotate(byAngle: -.pi * 2, duration: 1.15)))
+        ring.run(.repeatForever(.sequence([.fadeAlpha(to: 0.28, duration: 0.11), .fadeAlpha(to: 1, duration: 0.11)])))
+    }
+
+    func createElectricStrike(on enemy: Enemy) {
+        guard enemy.parent != nil else { return }
+        let path = CGMutablePath()
+        path.move(to: player.position)
+        let dx = enemy.position.x - player.position.x
+        let dy = enemy.position.y - player.position.y
+        for step in 1...5 {
+            let t = CGFloat(step) / 5
+            let jitter: CGFloat = step == 5 ? 0 : (step.isMultiple(of: 2) ? 9 : -9)
+            let length = max(1, hypot(dx, dy))
+            path.addLine(to: CGPoint(x: player.position.x + dx * t - dy / length * jitter,
+                                     y: player.position.y + dy * t + dx / length * jitter))
+        }
+        let bolt = SKShapeNode(path: path)
+        bolt.strokeColor = .white
+        bolt.lineWidth = 3
+        bolt.glowWidth = 9
+        bolt.zPosition = effectZ + 2
+        worldNode.addChild(bolt)
+        bolt.run(.sequence([.fadeOut(withDuration: 0.16), .removeFromParent()]))
+        createShieldImpact(at: enemy.position)
+    }
+
+    func createShieldImpact(at point: CGPoint) {
+        let flash = SKShapeNode(circleOfRadius: 12)
+        flash.position = point
+        flash.fillColor = .white
+        flash.strokeColor = elapsed < electricUntil ? NeonColors.purple : .cyan
+        flash.glowWidth = 10
+        flash.zPosition = effectZ + 1
+        worldNode.addChild(flash)
+        flash.run(.sequence([.group([.scale(to: 2.3, duration: 0.16), .fadeOut(withDuration: 0.16)]), .removeFromParent()]))
+    }
+
+    func animateFullRepair() {
+        for index in 0..<3 {
+            let ring = SKShapeNode(circleOfRadius: 18)
+            ring.position = player.position
+            ring.fillColor = NeonColors.green.withAlphaComponent(0.06)
+            ring.strokeColor = NeonColors.green
+            ring.lineWidth = 3
+            ring.glowWidth = 8
+            ring.zPosition = effectZ
+            ring.setScale(0.4)
+            worldNode.addChild(ring)
+            ring.run(.sequence([.wait(forDuration: Double(index) * 0.12),
+                                .group([.scale(to: 3.2, duration: 0.46), .fadeOut(withDuration: 0.46)]),
+                                .removeFromParent()]))
+        }
+    }
+
+    func createPowerUpDropBeacon(at point: CGPoint, color: SKColor) {
+        let beam = SKShapeNode(rectOf: CGSize(width: 3, height: 90), cornerRadius: 1.5)
+        beam.position = CGPoint(x: point.x, y: point.y + 45)
+        beam.fillColor = color.withAlphaComponent(0.5)
+        beam.strokeColor = .white
+        beam.glowWidth = 12
+        beam.zPosition = 11
+        worldNode.addChild(beam)
+        beam.run(.sequence([.fadeOut(withDuration: 0.9), .removeFromParent()]))
+    }
+
+    func createPowerUpCollectBurst(at point: CGPoint, color: SKColor) {
+        for index in 0..<12 {
+            let spark = SKShapeNode(circleOfRadius: 2.5)
+            let angle = CGFloat(index) * .pi * 2 / 12
+            spark.position = point
+            spark.fillColor = .white
+            spark.strokeColor = color
+            spark.glowWidth = 6
+            spark.zPosition = effectZ
+            worldNode.addChild(spark)
+            spark.run(.sequence([.group([.moveBy(x: cos(angle) * 55, y: sin(angle) * 55, duration: 0.3),
+                                         .fadeOut(withDuration: 0.3)]), .removeFromParent()]))
+        }
+    }
+
+    func showPowerUpAnnouncement(_ kind: PowerUpKind) {
+        let panel = SKShapeNode(rectOf: CGSize(width: 210, height: 42), cornerRadius: 11)
+        panel.name = "powerUpAnnouncement"
+        panel.position = CGPoint(x: 0, y: size.height / 2 - currentSafeAreaInsets().top - 112)
+        panel.fillColor = SKColor(red: 0.015, green: 0.025, blue: 0.06, alpha: 0.94)
+        panel.strokeColor = kind.color
+        panel.lineWidth = 2
+        panel.glowWidth = 5
+        panel.zPosition = hudZ + 8
+        let label = makeLabel(text: "\(kind.glyph)  \(kind.title)", fontSize: 13,
+                              fontName: "AvenirNext-Heavy", color: .white)
+        panel.addChild(label)
+        panel.setScale(0.65)
+        panel.alpha = 0
+        cameraNode.childNode(withName: "powerUpAnnouncement")?.removeFromParent()
+        cameraNode.addChild(panel)
+        panel.run(.sequence([.group([.fadeIn(withDuration: 0.12), .scale(to: 1, duration: 0.12)]),
+                             .wait(forDuration: 1.05),
+                             .group([.moveBy(x: 0, y: 12, duration: 0.25), .fadeOut(withDuration: 0.25)]),
+                             .removeFromParent()]))
     }
 }
 
@@ -4649,12 +5053,14 @@ extension GameScene {
         let caught = !next.containsShip(at: player.position)
         if caught {
             player.position = next.nearestFloor(to: player.position)
-            player.health -= min(30, max(12, player.maxHealth * 0.10)) * progression.damageMultiplier
-            lastDamageTime = gameTime
-            createPlayerDamageEffect()
-            updateHUD()
+            if elapsed >= invincibleUntil {
+                player.health -= min(30, max(12, player.maxHealth * 0.10)) * progression.damageMultiplier
+                lastDamageTime = gameTime
+                createPlayerDamageEffect()
+                updateHUD()
+            }
         }
-        for node in worldNode.children where node is Enemy || node is FluxPickup {
+        for node in worldNode.children where node is Enemy || node is FluxPickup || node is PowerUpPickup {
             if !next.containsShip(at: node.position) {
                 if node is Enemy {
                     let safe = next.floorCenters.filter { hypot($0.x - player.position.x, $0.y - player.position.y) > 140 }
@@ -4742,5 +5148,52 @@ extension GameScene {
                 if enemy.health <= 0 { destroyEnemy(enemy) }
             }
         }
+    }
+}
+
+extension GameScene {
+    func showRankUp(level: Int) {
+        cameraNode.childNode(withName: "rankUpPopup")?.removeFromParent()
+        let panel = SKShapeNode(rectOf: CGSize(width: 214, height: 58), cornerRadius: 10)
+        panel.name = "rankUpPopup"
+        let insets = currentSafeAreaInsets()
+        let restingX = size.width / 2 - insets.right - 119
+        panel.position = CGPoint(x: restingX + 42, y: size.height / 2 - insets.top - 78)
+        panel.fillColor = SKColor(red: 0.012, green: 0.025, blue: 0.065, alpha: 0.96)
+        panel.strokeColor = level >= 100 ? NeonColors.purple : .cyan
+        panel.lineWidth = 1.3
+        panel.glowWidth = 3
+        panel.zPosition = hudZ + 20
+        panel.alpha = 0
+
+        let accent = SKShapeNode(rectOf: CGSize(width: 3, height: 42), cornerRadius: 1.5)
+        accent.position.x = -100
+        accent.fillColor = level >= 100 ? NeonColors.purple : .cyan
+        accent.strokeColor = .clear
+        accent.glowWidth = 4
+        panel.addChild(accent)
+
+        let emblem = RankEmblemNode(level: level, size: 42)
+        emblem.position = CGPoint(x: -72, y: 0)
+        panel.addChild(emblem)
+        let title = makeLabel(text: "RANK UP", fontSize: 9,
+                              fontName: "AvenirNext-Heavy", color: .white)
+        title.horizontalAlignmentMode = .left
+        title.position = CGPoint(x: -43, y: 11)
+        panel.addChild(title)
+        let subtitle = makeLabel(text: "LEVEL \(level)  •  \(PlayerProgress.rankTitle(for: level))", fontSize: 7,
+                                 fontName: "AvenirNext-Bold", color: level >= 100 ? NeonColors.purple : .cyan)
+        subtitle.horizontalAlignmentMode = .left
+        subtitle.position = CGPoint(x: -43, y: -10)
+        let availableWidth: CGFloat = 132
+        if subtitle.frame.width > availableWidth { subtitle.setScale(availableWidth / subtitle.frame.width) }
+        panel.addChild(subtitle)
+        cameraNode.addChild(panel)
+        panel.run(.sequence([
+            .group([.fadeIn(withDuration: 0.16), .moveTo(x: restingX, duration: 0.20)]),
+            .wait(forDuration: 2.1),
+            .group([.moveBy(x: 30, y: 0, duration: 0.22), .fadeOut(withDuration: 0.22)]),
+            .removeFromParent()
+        ]))
     }
 }

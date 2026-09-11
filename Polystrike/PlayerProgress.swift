@@ -44,6 +44,7 @@ class PlayerProgress {
     // MARK: - Permanent Currency
     
     private(set) var points: Int = 0
+    private(set) var totalXP: Int = 0
     
     // MARK: - Permanent Upgrade Levels
     
@@ -64,9 +65,29 @@ class PlayerProgress {
     private let doubleShotKey = "doubleShotUnlocked"
     private let ownedShipsKey = "ownedShipStyles"
     private let selectedShipKey = "selectedShipStyle"
+    private let xpKey = "career.totalXP"
+    private let battleTimeKey = "career.battleTime"
+    private let enemiesKilledKey = "career.enemiesKilled"
+    private let tiersCompletedKey = "career.tiersCompleted"
+    private let highestTierKey = "career.highestTier"
+    private let highestScoreKey = "career.highestScore"
+    private let totalFluxKey = "career.totalFlux"
     
     private let defaults: UserDefaults
     var flux: Int { points }
+    var totalBattleTime: TimeInterval { defaults.double(forKey: battleTimeKey) }
+    var totalEnemiesKilled: Int { defaults.integer(forKey: enemiesKilledKey) }
+    var totalTiersCompleted: Int { defaults.integer(forKey: tiersCompletedKey) }
+    var highestTier: Int { defaults.integer(forKey: highestTierKey) }
+    var highestScore: Int { defaults.integer(forKey: highestScoreKey) }
+    var totalFluxEarned: Int { defaults.integer(forKey: totalFluxKey) }
+    var rankLevel: Int { Self.level(forXP: totalXP) }
+    var rankTitle: String { Self.rankTitle(for: rankLevel) }
+    var xpIntoLevel: Int { totalXP - Self.xpRequired(for: rankLevel) }
+    var xpForNextLevel: Int {
+        guard rankLevel < 1000 else { return 0 }
+        return Self.xpRequired(for: rankLevel + 1) - Self.xpRequired(for: rankLevel)
+    }
     var selectedShip: ShipStyle {
         let saved = defaults.string(forKey: selectedShipKey)
         let style = saved.flatMap(ShipStyle.init(rawValue:)) ?? .striker
@@ -107,7 +128,63 @@ class PlayerProgress {
     func addPoints(_ amount: Int) {
         guard amount > 0 else { return }
         points += amount
+        defaults.set(totalFluxEarned + amount, forKey: totalFluxKey)
         save()
+    }
+
+    @discardableResult
+    func addXP(_ amount: Int) -> Int? {
+        guard amount > 0, rankLevel < 1000 else { return nil }
+        let oldLevel = rankLevel
+        totalXP = min(Self.xpRequired(for: 1000), totalXP + amount)
+        save()
+        let newLevel = rankLevel
+        return newLevel > oldLevel ? newLevel : nil
+    }
+
+    func recordRun(duration: TimeInterval, enemiesKilled: Int, tiersCompleted: Int, highestTier: Int, score: Int) {
+        defaults.set(totalBattleTime + max(0, duration), forKey: battleTimeKey)
+        defaults.set(totalEnemiesKilled + max(0, enemiesKilled), forKey: enemiesKilledKey)
+        defaults.set(totalTiersCompleted + max(0, tiersCompleted), forKey: tiersCompletedKey)
+        defaults.set(max(self.highestTier, highestTier), forKey: highestTierKey)
+        defaults.set(max(self.highestScore, score), forKey: highestScoreKey)
+    }
+
+    static func xpRequired(for level: Int) -> Int {
+        let steps = max(0, min(999, level - 1))
+        // Calibrated against a strong run pace of roughly 35,000 score per
+        // three minutes: level 100 is about 8.47M XP (~12 combat hours),
+        // while level 1000 remains a true long-term pursuit at ~827M XP.
+        return 825 * steps * steps + 3_850 * steps
+    }
+
+    static func level(forXP xp: Int) -> Int {
+        var low = 1, high = 1000
+        while low < high {
+            let middle = (low + high + 1) / 2
+            if xp >= xpRequired(for: middle) { low = middle } else { high = middle - 1 }
+        }
+        return low
+    }
+
+    static func rankTitle(for level: Int) -> String {
+        switch level {
+        case 1000...: return "POLYSTRIKE LEGEND"
+        case 900...: return "ETERNAL SOVEREIGN"
+        case 800...: return "VOID MARSHAL"
+        case 700...: return "NOVA WARLORD"
+        case 600...: return "APEX COMMANDER"
+        case 500...: return "FLUX GENERAL"
+        case 400...: return "NEON OVERLORD"
+        case 300...: return "RIFT ADMIRAL"
+        case 200...: return "ARENA VANGUARD"
+        case 100...: return "ELITE SENTINEL"
+        case 75...: return "STRIKE CAPTAIN"
+        case 50...: return "BATTLE ACE"
+        case 25...: return "ARENA HUNTER"
+        case 10...: return "STRIKER"
+        default: return "RECRUIT"
+        }
     }
     
     
@@ -283,6 +360,7 @@ class PlayerProgress {
         defaults.set(damageLevel, forKey: damageKey)
         defaults.set(speedLevel, forKey: speedKey)
         defaults.set(doubleShotUnlocked, forKey: doubleShotKey)
+        defaults.set(totalXP, forKey: xpKey)
     }
     
     
@@ -315,6 +393,14 @@ class PlayerProgress {
         doubleShotUnlocked = defaults.bool(
             forKey: doubleShotKey
         )
+
+        totalXP = max(0, defaults.integer(forKey: xpKey))
+        if defaults.object(forKey: totalFluxKey) == nil {
+            defaults.set(points, forKey: totalFluxKey)
+        }
+        if defaults.object(forKey: highestScoreKey) == nil {
+            defaults.set(defaults.integer(forKey: "polystrikeBestScore"), forKey: highestScoreKey)
+        }
     }
 }
 

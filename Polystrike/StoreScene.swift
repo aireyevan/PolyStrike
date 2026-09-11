@@ -23,7 +23,7 @@ final class StoreScene: SKScene {
         wallet.strokeColor = NeonColors.green.withAlphaComponent(0.45)
         wallet.glowWidth = 2
         addChild(wallet)
-        wallet.addChild(createNeonLabel(text: "◈  (formatted(progress.flux)) FLUX", fontSize: 11, color: NeonColors.green))
+        wallet.addChild(createNeonLabel(text: "◈  \(formatted(progress.flux)) FLUX", fontSize: 11, color: NeonColors.green))
 
         addPreview(progress: progress)
         addTabs()
@@ -68,18 +68,8 @@ final class StoreScene: SKScene {
             let status = progress.selectedShip == previewShip ? "◆ EQUIPPED" : (progress.owns(previewShip) ? "◇ OWNED" : "LOCKED")
             label(status, at: CGPoint(x: size.width * 0.23, y: size.height * 0.245), font: 8, color: progress.owns(previewShip) ? NeonColors.green : NeonColors.mutedText)
         } else {
-            let rank = ShipUpgrade.allCases.reduce(0) { $0 + progress.level($1) }
-            label("SYSTEM RANK  \(rank)", at: CGPoint(x: size.width * 0.23, y: size.height * 0.315), font: 10, color: .white)
-            let track = SKShapeNode(rectOf: CGSize(width: size.width * 0.19, height: 3), cornerRadius: 1.5)
-            track.position = CGPoint(x: size.width * 0.23, y: size.height * 0.275)
-            track.fillColor = SKColor.white.withAlphaComponent(0.08); track.strokeColor = .clear
-            addChild(track)
-            let cap = ShipUpgrade.allCases.reduce(0) { $0 + $1.cap }
-            let filledWidth = max(2, size.width * 0.19 * CGFloat(rank) / CGFloat(max(1, cap)))
-            let fill = SKShapeNode(rectOf: CGSize(width: filledWidth, height: 3), cornerRadius: 1.5)
-            fill.position = CGPoint(x: -size.width * 0.095 + filledWidth / 2, y: 0)
-            fill.fillColor = .cyan; fill.strokeColor = .clear; fill.glowWidth = 3
-            track.addChild(fill)
+            label("PERMANENT LOADOUT", at: CGPoint(x: size.width * 0.23, y: size.height * 0.315), font: 10, color: .white)
+            label("SELECT A SYSTEM TO UPGRADE", at: CGPoint(x: size.width * 0.23, y: size.height * 0.275), font: 7, color: NeonColors.mutedText)
         }
     }
 
@@ -154,12 +144,7 @@ final class StoreScene: SKScene {
     }
 
     private func formatted(_ amount: Int) -> String {
-        if amount >= 1_000_000 {
-            let value = Double(amount) / 1_000_000
-            return value.rounded() == value ? "\(Int(value))M" : String(format: "%.2fM", value)
-        }
-        if amount >= 1_000 { return "\(amount / 1_000)K" }
-        return "\(amount)"
+        NumberFormatter.localizedString(from: NSNumber(value: max(0, amount)), number: .decimal)
     }
 
     private func shipColor(_ style: ShipStyle) -> SKColor {
@@ -199,7 +184,7 @@ final class StoreScene: SKScene {
                 let progress = PlayerProgress.shared
                 if progress.level(upgrade) >= upgrade.cap { notice = "SYSTEM FULLY UPGRADED" }
                 else if progress.buy(upgrade) { notice = "\(upgrade.title) INSTALLED" + ([ShipUpgrade.dash, .bomb].contains(upgrade) ? " • TAP ITS BUTTON DURING A RUN" : "") }
-                else { notice = "NEED \(progress.cost(upgrade) - progress.flux) MORE FLUX" }
+                else { notice = "NEED \(formatted(progress.cost(upgrade) - progress.flux)) MORE FLUX" }
                 rebuild(); return
             }
         }
