@@ -152,10 +152,9 @@ class PlayerProgress {
 
     static func xpRequired(for level: Int) -> Int {
         let steps = max(0, min(999, level - 1))
-        // Calibrated against a strong run pace of roughly 35,000 score per
-        // three minutes: level 100 is about 8.47M XP (~12 combat hours),
-        // while level 1000 remains a true long-term pursuit at ~827M XP.
-        return 825 * steps * steps + 3_850 * steps
+        // Deliberately paced beyond the first live-play calibration so early
+        // levels remain meaningful and the century ranks stay aspirational.
+        return 1_000 * steps * steps + 4_700 * steps
     }
 
     static func level(forXP xp: Int) -> Int {

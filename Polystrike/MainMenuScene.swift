@@ -321,22 +321,35 @@ final class BarracksScene: SKScene {
         createNeonBackground(for: self, gridSpacing: 54)
         addInterfaceAtmosphere(to: self)
         let progress = PlayerProgress.shared
+        let insets = view?.safeAreaInsets ?? .zero
+        let left = insets.left + 20
+        let right = size.width - insets.right - 20
+        let top = size.height - insets.top - 18
+        let bottom = insets.bottom + 12
+        let contentWidth = max(620, right - left)
+        let gap: CGFloat = 12
+        let rankWidth = contentWidth * 0.30
+        let statsWidth = contentWidth - rankWidth - gap
+        let panelsTop = top - 58
+        let panelsBottom = bottom + 112
+        let panelsHeight = max(150, panelsTop - panelsBottom)
+        let panelsY = panelsBottom + panelsHeight / 2
 
-        addLabel("BARRACKS", at: CGPoint(x: size.width * 0.15, y: size.height - 40), size: 23, color: .cyan)
-        addLabel("CAREER RECORD  /  RANK PROGRESSION", at: CGPoint(x: size.width * 0.15, y: size.height - 62), size: 8, color: NeonColors.mutedText)
+        addLabel("BARRACKS", at: CGPoint(x: left + 76, y: top - 9), size: 23, color: .cyan)
+        addLabel("CAREER RECORD  /  RANK PROGRESSION", at: CGPoint(x: left + 118, y: top - 32), size: 8, color: NeonColors.mutedText)
 
-        let rankPanel = panel(size: CGSize(width: size.width * 0.29, height: size.height * 0.49), color: .cyan)
-        rankPanel.position = CGPoint(x: size.width * 0.19, y: size.height * 0.55)
+        let rankPanel = panel(size: CGSize(width: rankWidth, height: panelsHeight), color: .cyan)
+        rankPanel.position = CGPoint(x: left + rankWidth / 2, y: panelsY)
         addChild(rankPanel)
-        let emblem = RankEmblemNode(level: progress.rankLevel, size: min(122, size.height * 0.24))
-        emblem.position = CGPoint(x: 0, y: size.height * 0.08)
+        let emblem = RankEmblemNode(level: progress.rankLevel, size: min(108, panelsHeight * 0.48))
+        emblem.position = CGPoint(x: 0, y: panelsHeight * 0.18)
         rankPanel.addChild(emblem)
-        addPanelLabel("LEVEL \(progress.rankLevel)", to: rankPanel, y: -size.height * 0.105, size: 17, color: .white)
-        addPanelLabel(progress.rankTitle, to: rankPanel, y: -size.height * 0.15, size: 9, color: .cyan)
+        addPanelLabel("LEVEL \(progress.rankLevel)", to: rankPanel, y: -panelsHeight * 0.17, size: 16, color: .white)
+        addPanelLabel(progress.rankTitle, to: rankPanel, y: -panelsHeight * 0.28, size: 8, color: .cyan)
 
-        let trackWidth = size.width * 0.22
+        let trackWidth = rankWidth * 0.76
         let track = SKShapeNode(rectOf: CGSize(width: trackWidth, height: 7), cornerRadius: 3.5)
-        track.position = CGPoint(x: 0, y: -size.height * 0.205)
+        track.position = CGPoint(x: 0, y: -panelsHeight * 0.39)
         track.fillColor = SKColor.white.withAlphaComponent(0.08)
         track.strokeColor = .clear
         rankPanel.addChild(track)
@@ -349,10 +362,10 @@ final class BarracksScene: SKScene {
         fill.glowWidth = 5
         track.addChild(fill)
         let xpText = progress.rankLevel >= 1000 ? "MAXIMUM RANK" : "\(number(progress.xpIntoLevel)) / \(number(progress.xpForNextLevel)) XP"
-        addPanelLabel(xpText, to: rankPanel, y: -size.height * 0.245, size: 8, color: NeonColors.mutedText)
+        addPanelLabel(xpText, to: rankPanel, y: -panelsHeight * 0.46, size: 7, color: NeonColors.mutedText)
 
-        let statPanel = panel(size: CGSize(width: size.width * 0.53, height: size.height * 0.49), color: NeonColors.purple)
-        statPanel.position = CGPoint(x: size.width * 0.66, y: size.height * 0.55)
+        let statPanel = panel(size: CGSize(width: statsWidth, height: panelsHeight), color: NeonColors.purple)
+        statPanel.position = CGPoint(x: left + rankWidth + gap + statsWidth / 2, y: panelsY)
         addChild(statPanel)
         let stats: [(String, String)] = [
             ("TIME IN BATTLE", duration(progress.totalBattleTime)),
@@ -364,37 +377,42 @@ final class BarracksScene: SKScene {
             ("CAREER XP", number(progress.totalXP)),
             ("CURRENT FLUX", number(progress.flux))
         ]
+        let cardWidth = statsWidth * 0.46
+        let cardHeight = max(28, (panelsHeight - 32) / 4 - 5)
+        let rowStep = cardHeight + 5
+        let firstRowY = panelsHeight / 2 - cardHeight / 2 - 12
         for (index, stat) in stats.enumerated() {
             let column = index % 2, row = index / 2
-            let cardWidth = size.width * 0.225
-            let card = SKShapeNode(rectOf: CGSize(width: cardWidth, height: size.height * 0.09), cornerRadius: 8)
-            card.position = CGPoint(x: (column == 0 ? -1 : 1) * size.width * 0.125,
-                                    y: size.height * 0.15 - CGFloat(row) * size.height * 0.105)
+            let card = SKShapeNode(rectOf: CGSize(width: cardWidth, height: cardHeight), cornerRadius: 8)
+            card.position = CGPoint(x: (column == 0 ? -1 : 1) * statsWidth * 0.25,
+                                    y: firstRowY - CGFloat(row) * rowStep)
             card.fillColor = SKColor(red: 0.015, green: 0.025, blue: 0.055, alpha: 0.92)
             card.strokeColor = (column == 0 ? SKColor.cyan : NeonColors.purple).withAlphaComponent(0.32)
             statPanel.addChild(card)
             let title = createNeonLabel(text: stat.0, fontSize: 7, color: NeonColors.mutedText)
-            title.position.y = 10
+            title.position.y = cardHeight * 0.22
             card.addChild(title)
             let value = createNeonLabel(text: stat.1, fontSize: 12, color: .white)
-            value.position.y = -9
+            value.position.y = -cardHeight * 0.20
             card.addChild(value)
         }
 
-        addLabel("CENTURY EMBLEMS", at: CGPoint(x: size.width * 0.12, y: size.height * 0.245), size: 9, color: NeonColors.mutedText)
+        addLabel("CENTURY EMBLEMS", at: CGPoint(x: left + 72, y: bottom + 94), size: 9, color: NeonColors.mutedText)
         for index in 1...10 {
             let milestone = index * 100
             let locked = progress.rankLevel < milestone
-            let emblem = RankEmblemNode(level: milestone, size: min(53, size.width * 0.058), locked: locked)
-            emblem.position = CGPoint(x: size.width * (0.08 + CGFloat(index - 1) * 0.093), y: size.height * 0.13)
+            let emblemSize = min(48, contentWidth / 13)
+            let x = left + contentWidth * (CGFloat(index) - 0.5) / 10
+            let emblem = RankEmblemNode(level: milestone, size: emblemSize, locked: locked)
+            emblem.position = CGPoint(x: x, y: bottom + 47)
             addChild(emblem)
-            addLabel("\(milestone)", at: CGPoint(x: emblem.position.x, y: size.height * 0.045), size: 7,
+            addLabel("\(milestone)", at: CGPoint(x: x, y: bottom + 7), size: 7,
                      color: locked ? SKColor(white: 0.28, alpha: 1) : .white)
         }
 
         let back = NeonButton(title: "BACK", size: CGSize(width: 118, height: 36), color: .cyan)
         back.name = "back"
-        back.position = CGPoint(x: size.width - 78, y: size.height - 43)
+        back.position = CGPoint(x: right - 59, y: top - 10)
         back.zPosition = 8
         addChild(back)
     }

@@ -35,6 +35,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var powerUpsDroppedThisTier = 0
     private var invincibleUntil: TimeInterval = 0
     private var electricUntil: TimeInterval = 0
+    private var nextElectricPulseAt: TimeInterval = 0
     private let powerUpHUD = SKNode()
     // MARK: - Physics Categories
 
@@ -210,6 +211,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         powerUpsDroppedThisTier = 0
         invincibleUntil = 0
         electricUntil = 0
+        nextElectricPulseAt = 0
 
         joystickVisibilityTimer = 0
         joysticksHidden = false
@@ -1988,22 +1990,6 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             return
         }
 
-        if elapsed < electricUntil {
-            createElectricStrike(on: enemy)
-            if enemy.userData?["sentinel"] as? Bool == true {
-                enemy.health -= max(90, enemy.maxHealth * 0.16)
-                if enemy.health <= 0 { destroyEnemy(enemy) }
-            } else {
-                destroyEnemy(enemy)
-            }
-            return
-        }
-
-        guard elapsed >= invincibleUntil else {
-            createShieldImpact(at: enemy.position)
-            return
-        }
-
         guard enemy.parent != nil, bullet.parent != nil else {
             return
         }
@@ -2071,6 +2057,24 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
         guard let enemy =
             enemyBody.node as? Enemy else {
+            return
+        }
+
+        guard enemy.parent != nil else { return }
+
+        if elapsed < electricUntil {
+            createElectricStrike(on: enemy)
+            if enemy.userData?["sentinel"] as? Bool == true {
+                enemy.health -= max(90, enemy.maxHealth * 0.16)
+                if enemy.health <= 0 { destroyEnemy(enemy) }
+            } else {
+                destroyEnemy(enemy)
+            }
+            return
+        }
+
+        guard elapsed >= invincibleUntil else {
+            createShieldImpact(at: enemy.position)
             return
         }
 
@@ -4684,7 +4688,6 @@ extension GameScene {
             .fadeOut(withDuration: 0.5),
             .removeFromParent()
         ]))
-        createPowerUpDropBeacon(at: position, color: kind.color)
     }
 
     func collectPowerUp(_ pickup: PowerUpPickup) {
@@ -4708,6 +4711,7 @@ extension GameScene {
             fireTripleRadialBarrage()
         case .electricity:
             electricUntil = max(electricUntil, elapsed) + 12
+            nextElectricPulseAt = elapsed
             installElectricAura()
         }
         refreshPowerUpHUD()
@@ -4722,6 +4726,7 @@ extension GameScene {
     }
 
     func updatePowerUpEffects() {
+        updateElectricPulse()
         if elapsed >= invincibleUntil {
             player.childNode(withName: "invincibilityAura")?.removeFromParent()
         }
@@ -4729,6 +4734,41 @@ extension GameScene {
             player.childNode(withName: "electricAura")?.removeFromParent()
         }
         refreshPowerUpHUD()
+    }
+
+    func updateElectricPulse() {
+        guard elapsed < electricUntil, elapsed >= nextElectricPulseAt else { return }
+        nextElectricPulseAt = elapsed + 0.72
+        let radius: CGFloat = 245
+        let targets = worldNode.children.compactMap { $0 as? Enemy }
+            .filter { $0.parent != nil && hypot($0.position.x - player.position.x, $0.position.y - player.position.y) <= radius }
+            .sorted {
+                hypot($0.position.x - player.position.x, $0.position.y - player.position.y) <
+                hypot($1.position.x - player.position.x, $1.position.y - player.position.y)
+            }
+        guard !targets.isEmpty else { return }
+
+        let pulse = SKShapeNode(circleOfRadius: 34)
+        pulse.position = player.position
+        pulse.fillColor = NeonColors.purple.withAlphaComponent(0.04)
+        pulse.strokeColor = NeonColors.purple.withAlphaComponent(0.75)
+        pulse.lineWidth = 2
+        pulse.glowWidth = 6
+        pulse.zPosition = effectZ
+        worldNode.addChild(pulse)
+        pulse.run(.sequence([.group([.scale(to: radius / 34, duration: 0.22),
+                                     .fadeOut(withDuration: 0.22)]),
+                             .removeFromParent()]))
+
+        for enemy in targets.prefix(3) {
+            createElectricStrike(on: enemy)
+            if enemy.userData?["sentinel"] as? Bool == true {
+                enemy.health -= max(65, enemy.maxHealth * 0.10)
+                if enemy.health <= 0 { destroyEnemy(enemy) }
+            } else {
+                destroyEnemy(enemy)
+            }
+        }
     }
 
     func refreshPowerUpHUD() {
@@ -4870,17 +4910,6 @@ extension GameScene {
                                 .group([.scale(to: 3.2, duration: 0.46), .fadeOut(withDuration: 0.46)]),
                                 .removeFromParent()]))
         }
-    }
-
-    func createPowerUpDropBeacon(at point: CGPoint, color: SKColor) {
-        let beam = SKShapeNode(rectOf: CGSize(width: 3, height: 90), cornerRadius: 1.5)
-        beam.position = CGPoint(x: point.x, y: point.y + 45)
-        beam.fillColor = color.withAlphaComponent(0.5)
-        beam.strokeColor = .white
-        beam.glowWidth = 12
-        beam.zPosition = 11
-        worldNode.addChild(beam)
-        beam.run(.sequence([.fadeOut(withDuration: 0.9), .removeFromParent()]))
     }
 
     func createPowerUpCollectBurst(at point: CGPoint, color: SKColor) {
@@ -5191,7 +5220,7 @@ extension GameScene {
         cameraNode.addChild(panel)
         panel.run(.sequence([
             .group([.fadeIn(withDuration: 0.16), .moveTo(x: restingX, duration: 0.20)]),
-            .wait(forDuration: 2.1),
+            .wait(forDuration: 3.2),
             .group([.moveBy(x: 30, y: 0, duration: 0.22), .fadeOut(withDuration: 0.22)]),
             .removeFromParent()
         ]))
