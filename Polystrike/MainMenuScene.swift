@@ -74,7 +74,7 @@ final class MainMenuScene: SKScene {
         let column2 = leftEdge + buttonWidth + gutter + buttonWidth / 2
         let column3 = leftEdge + (buttonWidth + gutter) * 2 + buttonWidth / 2
         menuButton("INFINITE MODE", name: "play", x: column1, y: row1Y, color: .cyan, size: CGSize(width: buttonWidth, height: buttonHeight), selected: true)
-        menuButton("STORY MODE  /  SOON", name: "storyMode", x: column2, y: row1Y, color: NeonColors.orange, size: CGSize(width: buttonWidth, height: buttonHeight), enabled: false)
+        menuButton("STORY MODE", name: "storyMode", x: column2, y: row1Y, color: NeonColors.orange, size: CGSize(width: buttonWidth, height: buttonHeight))
         menuButton("STORE", name: "store", x: column3, y: row1Y, color: NeonColors.purple, size: CGSize(width: buttonWidth, height: buttonHeight))
         menuButton("BARRACKS", name: "barracks", x: column1, y: row2Y, color: NeonColors.green, size: CGSize(width: buttonWidth, height: buttonHeight))
         menuButton("SETTINGS", name: "settings", x: column2, y: row2Y, color: NeonColors.blue, size: CGSize(width: buttonWidth, height: buttonHeight))
@@ -174,6 +174,7 @@ final class MainMenuScene: SKScene {
 
     private func buildStoryPreview(at center: CGPoint, frameSize: CGSize) {
         let tile = SKShapeNode(rectOf: frameSize, cornerRadius: 1)
+        tile.name = "storyMode"
         tile.position = center
         tile.fillColor = SKColor(red: 0.035, green: 0.012, blue: 0.055, alpha: 0.96)
         tile.strokeColor = NeonColors.orange.withAlphaComponent(0.42)
@@ -208,7 +209,7 @@ final class MainMenuScene: SKScene {
         let title = createNeonLabel(text: "STORY MODE", fontSize: 14, color: .white)
         title.position.y = -16
         tile.addChild(title)
-        let status = createNeonLabel(text: "COMING SOON", fontSize: 8, color: NeonColors.orange)
+        let status = createNeonLabel(text: "5 SECTORS  •  21 MISSIONS", fontSize: 8, color: NeonColors.orange)
         status.position.y = -37
         tile.addChild(status)
 
@@ -337,6 +338,12 @@ final class MainMenuScene: SKScene {
         }
         if names.contains("play") || names.contains("playPreview") {
             showInfiniteBriefing()
+            return
+        }
+        if names.contains("storyMode") {
+            let scene = StoryMissionSelectScene(size: size)
+            scene.scaleMode = .resizeFill
+            view?.presentScene(scene, transition: .fade(withDuration: 0.3))
             return
         }
         for node in nodes(at: point) {
