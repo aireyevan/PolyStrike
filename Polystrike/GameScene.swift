@@ -1452,13 +1452,16 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         player.lastShotTime =
             currentTime
 
-        if progression.doubleShotUnlocked {
-            let angle = atan2(direction.dy, direction.dx)
-            for offset: CGFloat in [-0.065, 0.065] {
-                fireBullet(direction: CGVector(dx: cos(angle + offset), dy: sin(angle + offset)))
-            }
-        } else {
-            fireBullet(direction: direction)
+        let angle = atan2(direction.dy, direction.dx)
+        let offsets: [CGFloat]
+        switch progression.projectileCount {
+        case 4: offsets = [-0.15, -0.05, 0.05, 0.15]
+        case 3: offsets = [-0.11, 0, 0.11]
+        case 2: offsets = [-0.065, 0.065]
+        default: offsets = [0]
+        }
+        for offset in offsets {
+            fireBullet(direction: CGVector(dx: cos(angle + offset), dy: sin(angle + offset)))
         }
     }
 
@@ -1467,9 +1470,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         showsMuzzleFlash: Bool = true
     ) {
 
-        let bullet = Bullet(
-            damage: player.damage
-        )
+        let bullet = Bullet(damage: player.damage, color: player.projectileColor)
 
         bullet.bulletSpeed =
             player.projectileSpeed
@@ -2709,7 +2710,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         guard tierLabel != nil else { return }
         let alive = worldNode.children.reduce(into: 0) { if $1 is Enemy { $0 += 1 } }
         let remaining = regularEnemiesRemaining + bossesRemaining + alive
-        tierLabel.text = "TIER \(currentTier.number)   /   \(remaining) HOSTILES"
+        tierLabel.text = "TIER \(currentTier.number)   /   \(remaining) ENEMIES"
     }
 
     private func updateTierAppearance() {
@@ -4857,19 +4858,20 @@ extension GameScene {
     func collectPickup(_ pickup: FluxPickup) {
         guard pickup.parent != nil else { return }
         pickup.removeFromParent()
-        let reward = pickup.value + pickup.value * progression.level(.salvage) / 50
+        let grossReward = pickup.value + pickup.value * progression.level(.salvage) / 50
+        let reward = max(1, Int((Double(grossReward) * 0.70).rounded(.down)))
         runCoins += reward
         progression.addPoints(reward)
         coinLabel.text = "\(runCoins)"
     }
 
     func maybeDropPowerUp(at position: CGPoint, defeatedSentinel: Bool) {
-        let cap = currentTier.number >= 15 ? 3 : (currentTier.number >= 6 ? 2 : 1)
+        let cap = currentTier.number >= 18 ? 2 : 1
         guard powerUpsDroppedThisTier < cap else { return }
         let activeDrops = worldNode.children.filter { $0 is PowerUpPickup }.count
         guard activeDrops < 2 else { return }
-        let baseChance = min(0.035, 0.012 + Double(max(0, currentTier.number - 1)) * 0.0012)
-        let chance = defeatedSentinel ? min(0.09, baseChance * 2.2) : baseChance
+        let baseChance = min(0.015, 0.0055 + Double(max(0, currentTier.number - 1)) * 0.00045)
+        let chance = defeatedSentinel ? min(0.035, baseChance * 1.8) : baseChance
         guard Double.random(in: 0..<1) < chance,
               let kind = PowerUpKind.allCases.randomElement() else { return }
 
@@ -5230,7 +5232,7 @@ extension GameScene {
             let next = max(0, remaining - deltaTime)
             tierTransitionRemaining = next
             arenaStatus.fontColor = .systemRed
-            arenaStatus.text = "TIER CLEAR  /  MORPH \(Int(ceil(next)))s"
+            arenaStatus.text = "MAP CHANGING"
             if next == 0 {
                 commitArenaShift()
                 tierTransitionRemaining = nil
@@ -5238,7 +5240,7 @@ extension GameScene {
             }
         } else {
             arenaStatus.fontColor = SKColor(white: 0.55, alpha: 1)
-            arenaStatus.text = "\(activeArena.name)  /  CLEAR ALL HOSTILES"
+            arenaStatus.text = ""
         }
     }
 

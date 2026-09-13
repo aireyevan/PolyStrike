@@ -297,7 +297,7 @@ final class MainMenuScene: SKScene {
         panel.addChild(subtitle)
 
         let briefing = [
-            "CLEAR EVERY HOSTILE TO ADVANCE THE TIER.",
+            "DEFEAT EVERY ENEMY TO ADVANCE THE TIER.",
             "THE ARENA SHIFTS BETWEEN WAVES.",
             "FACE ELITES, HIVES AND BOSSES AS THE RUN ESCALATES.",
             "COLLECT FLUX, FIND POWER-UPS AND CHASE A NEW HIGH SCORE."
@@ -364,242 +364,239 @@ final class MainMenuScene: SKScene {
 }
 
 final class RankEmblemNode: SKNode {
+    // All artwork fits a 100-point square, including wings and crowns.
+    // Shared by Barracks, the menu and the in-game rank-up notification.
+    private var accent: SKColor = .cyan
+    private var trim: SKColor = .white
+    private var lockedArtwork = false
+    private let ink = SKColor(red: 0.025, green: 0.035, blue: 0.06, alpha: 1)
+    private let steel = SKColor(red: 0.22, green: 0.27, blue: 0.34, alpha: 1)
+    private let silver = SKColor(red: 0.69, green: 0.77, blue: 0.83, alpha: 1)
+
     init(level: Int, size: CGFloat, locked: Bool = false) {
         super.init()
-        let prestige = min(10, max(0, level / 100))
-        let rankBand = min(9, max(0, (level - 1) / 10))
-        let complexity = prestige > 0 ? prestige : rankBand
-        let primary = locked ? SKColor(white: 0.25, alpha: 0.7) : Self.primaryColor(prestige: prestige, rankBand: rankBand)
-        let secondary = locked ? SKColor(white: 0.14, alpha: 0.8) : Self.secondaryColor(prestige: prestige, rankBand: rankBand)
-        let glow: CGFloat = locked ? 0 : (prestige > 0 ? 8 : 3 + CGFloat(rankBand) * 0.35)
-
+        let rank = min(1000, max(1, level))
+        let prestige = rank / 100
+        let band = min(9, (rank - 1) / 10)
+        lockedArtwork = locked
+        let colors: [SKColor] = [.cyan, NeonColors.blue, NeonColors.purple, NeonColors.pink,
+                                 NeonColors.green, NeonColors.orange, NeonColors.yellow,
+                                 SKColor(red: 0.55, green: 0.39, blue: 1, alpha: 1), .cyan, NeonColors.yellow]
+        accent = locked ? SKColor(white: 0.36, alpha: 1) : colors[prestige > 0 ? prestige - 1 : band]
+        trim = locked ? SKColor(white: 0.31, alpha: 1) : (prestige >= 7 ? NeonColors.yellow : silver)
+        let art = SKNode()
+        art.name = "rankArtwork"
+        art.setScale(max(1, size) / 100)
+        addChild(art)
         if prestige == 0 {
-            buildStandardRank(level: level, band: rankBand, size: size,
-                              primary: primary, secondary: secondary, locked: locked)
-            return
+            standardRank(level: rank, band: band, on: art)
+        } else {
+            prestigeRank(prestige, on: art)
         }
-
-        // A dark armored backing keeps every emblem legible over the arena grid.
-        let outer = SKShapeNode(path: Self.polygon(sides: min(12, 5 + complexity / 2),
-                                                   radius: size * 0.48,
-                                                   rotation: -.pi / 2))
-        outer.fillColor = SKColor(red: 0.012, green: 0.022, blue: 0.055, alpha: 0.98)
-        outer.strokeColor = primary
-        outer.lineWidth = prestige > 0 ? 2.4 : 1.5
-        outer.glowWidth = glow
-        addChild(outer)
-
-        let inner = SKShapeNode(path: Self.polygon(sides: 4 + complexity % 4,
-                                                   radius: size * 0.31,
-                                                   rotation: .pi / 4))
-        inner.fillColor = secondary.withAlphaComponent(locked ? 0.08 : 0.25)
-        inner.strokeColor = locked ? primary : .white
-        inner.lineWidth = prestige > 0 ? 1.8 : 1.2
-        inner.glowWidth = locked ? 0 : glow * 0.45
-        addChild(inner)
-
-        // Rank 1–99 gains chevrons, and side laurels every ten levels.
-        if prestige == 0 {
-            let chevrons = 1 + rankBand / 2
-            for index in 0..<chevrons {
-                let y = -size * 0.33 - CGFloat(index) * size * 0.075
-                let path = CGMutablePath()
-                path.move(to: CGPoint(x: -size * 0.22, y: y + size * 0.07))
-                path.addLine(to: CGPoint(x: 0, y: y))
-                path.addLine(to: CGPoint(x: size * 0.22, y: y + size * 0.07))
-                let chevron = SKShapeNode(path: path)
-                chevron.strokeColor = primary
-                chevron.lineWidth = max(1, size * 0.025)
-                chevron.glowWidth = glow * 0.45
-                addChild(chevron)
-            }
+        // A separate dark tab protects numerals from busy central artwork.
+        let tab = plate([(-27,-31),(27,-31),(24,-45),(-24,-45)], fill: ink, edge: trim, on: art)
+        tab.zPosition = 20
+        let label = createNeonLabel(text: locked ? "?" : "\(rank)", fontSize: max(12, 700 / max(1, size)), color: locked ? accent : .white)
+        label.position = CGPoint(x: 0, y: -38)
+        label.verticalAlignmentMode = .center
+        label.zPosition = 21
+        art.addChild(label)
+        if locked {
+            // A visible lock lets players preview the silhouette of the reward.
+            let lock = plate([(-5,-27),(5,-27),(5,-20),(-5,-20)], fill: trim, edge: ink, on: art)
+            lock.zPosition = 22
+            let shackle = SKShapeNode(path: Self.path([(-3,-20),(-3,-16),(3,-16),(3,-20)], closed: false))
+            shackle.strokeColor = trim; shackle.lineWidth = 2; shackle.zPosition = 22
+            art.addChild(shackle)
         }
-
-        if complexity >= 1 {
-            for direction: CGFloat in [-1, 1] {
-                let wing = SKShapeNode(path: Self.wing(direction: direction, size: size, blades: min(5, 2 + complexity / 2)))
-                wing.fillColor = secondary.withAlphaComponent(locked ? 0.07 : 0.22)
-                wing.strokeColor = primary
-                wing.lineWidth = prestige > 0 ? 1.7 : 1.1
-                wing.glowWidth = locked ? 0 : glow * 0.55
-                wing.zPosition = -1
-                addChild(wing)
-            }
-        }
-
-        // Every prestige receives another crown layer, orbital detail, and gem.
-        if prestige > 0 {
-            let spikeCount = 6 + prestige
-            let crown = SKShapeNode(path: Self.star(points: spikeCount,
-                                                    outer: size * (0.55 + CGFloat(prestige) * 0.012),
-                                                    inner: size * 0.43,
-                                                    rotation: -.pi / 2))
-            crown.fillColor = primary.withAlphaComponent(locked ? 0.03 : 0.08)
-            crown.strokeColor = primary.withAlphaComponent(locked ? 0.3 : 0.82)
-            crown.lineWidth = prestige >= 5 ? 1.5 : 1
-            crown.glowWidth = locked ? 0 : glow * 0.6
-            crown.zPosition = -3
-            addChild(crown)
-            if !locked && prestige >= 4 {
-                crown.run(.repeatForever(.rotate(byAngle: prestige >= 8 ? -.pi * 2 : .pi * 2,
-                                                 duration: max(5, 11 - Double(prestige) * 0.5))))
-            }
-            let gem = SKShapeNode(path: Self.polygon(sides: prestige >= 7 ? 8 : 6,
-                                                     radius: size * (prestige >= 8 ? 0.16 : 0.12),
-                                                     rotation: .pi / 2))
-            gem.fillColor = locked ? primary.withAlphaComponent(0.12) : .white
-            gem.strokeColor = secondary
-            gem.lineWidth = 1.5
-            gem.glowWidth = locked ? 0 : 6 + CGFloat(prestige) * 0.5
-            gem.zPosition = 2
-            addChild(gem)
-            if !locked { gem.run(.repeatForever(.sequence([.scale(to: 1.16, duration: 0.55), .scale(to: 0.88, duration: 0.55)]))) }
-        }
-
-        let label = createNeonLabel(text: locked ? "?" : "\(level)", fontSize: max(7, size * (prestige > 0 ? 0.15 : 0.18)), color: locked ? primary : .white)
-        label.position.y = prestige > 0 ? -size * 0.02 : size * 0.02
-        label.zPosition = 3
-        addChild(label)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    private func buildStandardRank(level: Int, band: Int, size: CGFloat,
-                                   primary: SKColor, secondary: SKColor, locked: Bool) {
-        let shield = CGMutablePath()
-        shield.move(to: CGPoint(x: 0, y: size * 0.48))
-        shield.addLine(to: CGPoint(x: size * 0.39, y: size * 0.29))
-        shield.addLine(to: CGPoint(x: size * 0.34, y: -size * 0.18))
-        shield.addLine(to: CGPoint(x: 0, y: -size * 0.50))
-        shield.addLine(to: CGPoint(x: -size * 0.34, y: -size * 0.18))
-        shield.addLine(to: CGPoint(x: -size * 0.39, y: size * 0.29))
-        shield.closeSubpath()
-        let plate = SKShapeNode(path: shield)
-        plate.fillColor = locked ? SKColor(white: 0.04, alpha: 0.96) : SKColor(red: 0.012, green: 0.025, blue: 0.055, alpha: 0.98)
-        plate.strokeColor = primary
-        plate.lineWidth = 1.5 + CGFloat(band) * 0.08
-        plate.glowWidth = locked ? 0 : 3 + CGFloat(band) * 0.35
-        addChild(plate)
+    @discardableResult
+    private func plate(_ points: [(CGFloat, CGFloat)], fill: SKColor, edge: SKColor? = nil,
+                       on parent: SKNode) -> SKShapeNode {
+        let node = SKShapeNode(path: Self.path(points))
+        node.fillColor = lockedArtwork ? SKColor(white: fill == ink ? 0.045 : (fill == silver ? 0.38 : (fill == steel ? 0.17 : 0.27)), alpha: 1) : fill
+        node.strokeColor = edge ?? accent
+        node.lineWidth = 1.5
+        node.lineJoin = .miter
+        parent.addChild(node)
+        return node
+    }
 
-        let inset = SKShapeNode(path: Self.polygon(sides: band >= 6 ? 6 : 4,
-                                                   radius: size * 0.25,
-                                                   rotation: .pi / 4))
-        inset.fillColor = secondary.withAlphaComponent(locked ? 0.06 : 0.18)
-        inset.strokeColor = primary.withAlphaComponent(0.75)
-        inset.lineWidth = 1
-        addChild(inset)
+    private static func path(_ points: [(CGFloat, CGFloat)], closed: Bool = true) -> CGPath {
+        let path = CGMutablePath()
+        for (index, point) in points.enumerated() {
+            if index == 0 { path.move(to: CGPoint(x: point.0, y: point.1)) }
+            else { path.addLine(to: CGPoint(x: point.0, y: point.1)) }
+        }
+        if closed { path.closeSubpath() }
+        return path
+    }
 
-        if band >= 3 {
-            for direction: CGFloat in [-1, 1] {
-                let rail = CGMutablePath()
-                rail.move(to: CGPoint(x: direction * size * 0.31, y: size * 0.22))
-                rail.addLine(to: CGPoint(x: direction * size * (0.48 + CGFloat(band) * 0.012), y: size * 0.10))
-                rail.addLine(to: CGPoint(x: direction * size * 0.34, y: -size * 0.05))
-                let wing = SKShapeNode(path: rail)
-                wing.strokeColor = primary
-                wing.lineWidth = band >= 7 ? 2 : 1.2
-                wing.glowWidth = locked ? 0 : 3
-                wing.zPosition = -1
-                addChild(wing)
+    private func shield(on parent: SKNode) {
+        plate([(-29,29),(-18,37),(18,37),(29,29),(25,-19),(0,-43),(-25,-19)], fill: steel, edge: trim, on: parent)
+        plate([(-24,26),(0,32),(24,26),(20,-16),(0,-34),(-20,-16)], fill: ink, on: parent)
+        for side: CGFloat in [-1,1] {
+            plate([(side*26,24),(side*22,20),(side*19,-15),(side*23,-12)], fill: silver, edge: trim, on: parent)
+        }
+    }
+
+    private func wings(count: Int, on parent: SKNode) {
+        for side: CGFloat in [-1,1] {
+            for index in 0..<count {
+                let y = 26 - CGFloat(index) * 9
+                let reach = 47 - CGFloat(index) * 3
+                plate([(side*17,y-5),(side*reach,y+12),(side*(reach-5),y-2),
+                       (side*26,y-12)], fill: index.isMultiple(of: 2) ? steel : ink, edge: trim, on: parent)
+                plate([(side*28,y),(side*(reach-3),y+8),(side*(reach-6),y+3)], fill: accent, edge: accent, on: parent)
             }
         }
+    }
 
+    private func swords(on parent: SKNode) {
+        for side: CGFloat in [-1,1] {
+            let sword = SKNode(); sword.zRotation = side * 0.90; parent.addChild(sword)
+            plate([(-3,-34),(3,-34),(3,32),(0,46),(-3,32)], fill: silver, edge: trim, on: sword)
+            plate([(-12,-20),(12,-20),(12,-15),(-12,-15)], fill: steel, on: sword)
+            plate([(-4,-35),(4,-35),(4,-25),(-4,-25)], fill: ink, on: sword)
+        }
+    }
+
+    private func crown(points: Int, on parent: SKNode) {
+        var outline: [(CGFloat, CGFloat)] = [(-22,25),(-25,43)]
+        for index in 0..<points {
+            let x = -22 + CGFloat(index) * 44 / CGFloat(max(1, points - 1))
+            outline.append((x, index == points / 2 ? 49 : 44))
+            if index < points - 1 { outline.append((x + 22 / CGFloat(points-1),32)) }
+        }
+        outline += [(25,43),(22,25)]
+        plate(outline, fill: steel, edge: trim, on: parent)
+        plate([(-20,28),(20,28),(18,23),(-18,23)], fill: accent, edge: trim, on: parent)
+    }
+
+    private func skull(beast: Bool = false, on parent: SKNode) {
+        plate([(-20,18),(-12,27),(12,27),(20,18),(19,2),(13,-5),(12,-20),
+               (0,-27),(-12,-20),(-13,-5),(-19,2)], fill: silver, edge: trim, on: parent)
+        // Faceted temples and a recessed jaw create depth without a bright outer glow.
+        for side: CGFloat in [-1,1] {
+            plate([(side*18,17),(side*12,12),(side*13,-4),(side*19,2)], fill: steel, edge: steel, on: parent)
+            plate([(side*3,6),(side*16,12),(side*13,0),(side*4,-2)], fill: ink, edge: ink, on: parent)
+            let eye = plate([(side*5,5),(side*14,9),(side*11,3)], fill: accent, edge: accent, on: parent)
+            eye.glowWidth = lockedArtwork ? 0 : 1.5
+            if beast {
+                plate([(side*12,-5),(side*19,-2),(side*14,-23),(side*8,-15)], fill: silver, edge: trim, on: parent)
+            }
+        }
+        plate([(0,1),(-4,-7),(4,-7)], fill: ink, edge: ink, on: parent)
+        plate([(-10,-10),(10,-10),(8,-19),(-8,-19)], fill: ink, edge: ink, on: parent)
+        for x: CGFloat in [-7,-2,3] {
+            plate([(x,-10),(x+3,-10),(x+3,-16),(x,-16)], fill: silver, edge: silver, on: parent)
+        }
+    }
+
+    private func helmet(style: Int, on parent: SKNode) {
+        plate([(-19,17),(-10,30),(10,30),(19,17),(17,-12),(0,-25),(-17,-12)], fill: steel, edge: trim, on: parent)
+        plate([(-16,11),(0,6),(16,11),(13,-1),(0,-7),(-13,-1)], fill: ink, edge: ink, on: parent)
+        let visor = plate([(-14,9),(0,4),(14,9),(11,3),(0,-1),(-11,3)], fill: accent, edge: accent, on: parent)
+        visor.glowWidth = lockedArtwork ? 0 : 1.3
+        plate([(-3,27),(3,27),(5,12),(0,8),(-5,12)], fill: silver, edge: trim, on: parent)
+        if style > 1 {
+            for side: CGFloat in [-1,1] {
+                plate([(side*15,16),(side*30,40),(side*28,14),(side*17,2)], fill: steel, edge: trim, on: parent)
+            }
+        }
+        for y: CGFloat in [-9,-14] {
+            plate([(-7,y),(7,y),(5,y-2),(-5,y-2)], fill: ink, edge: ink, on: parent)
+        }
+    }
+
+    private func star(radius: CGFloat, y: CGFloat, on parent: SKNode) {
+        let vertices: [(CGFloat,CGFloat)] = (0..<10).map { i in
+            let angle = CGFloat(i) * .pi / 5 + .pi / 2
+            let r = i.isMultiple(of: 2) ? radius : radius * 0.45
+            return (cos(angle) * r, sin(angle) * r + y)
+        }
+        plate(vertices, fill: trim, edge: accent, on: parent)
+    }
+
+    private func standardRank(level: Int, band: Int, on art: SKNode) {
+        if band >= 3 { wings(count: 1 + (band - 3) / 2, on: art) }
+        if band >= 8 { swords(on: art) }
+        shield(on: art)
+        if band >= 8 {
+            let head = SKNode(); head.setScale(0.67); head.position.y = 9; art.addChild(head)
+            helmet(style: band == 9 ? 2 : 1, on: head)
+        } else if band >= 5 {
+            star(radius: band >= 7 ? 15 : 12, y: 14, on: art)
+        } else {
+            plate([(0,27),(9,13),(0,17),(-9,13)], fill: silver, edge: trim, on: art)
+        }
         let chevrons = 1 + band % 3
         for index in 0..<chevrons {
-            let y = -size * 0.18 - CGFloat(index) * size * 0.075
-            let path = CGMutablePath()
-            path.move(to: CGPoint(x: -size * 0.17, y: y + size * 0.065))
-            path.addLine(to: CGPoint(x: 0, y: y))
-            path.addLine(to: CGPoint(x: size * 0.17, y: y + size * 0.065))
-            let mark = SKShapeNode(path: path)
-            mark.strokeColor = locked ? primary : .white
-            mark.lineWidth = max(1, size * 0.022)
-            mark.glowWidth = locked ? 0 : 2
-            mark.zPosition = 2
-            addChild(mark)
+            let y = 1 - CGFloat(index) * 8
+            plate([(-15,y+4),(0,y-3),(15,y+4),(15,y-1),(0,y-8),(-15,y-1)],
+                  fill: index == 0 ? accent : steel, edge: trim, on: art)
         }
-
-        if band >= 6 {
-            let crown = SKShapeNode(path: Self.star(points: min(8, 4 + band / 2),
-                                                    outer: size * 0.19,
-                                                    inner: size * 0.09,
-                                                    rotation: -.pi / 2))
-            crown.position.y = size * 0.15
-            crown.fillColor = locked ? primary.withAlphaComponent(0.1) : .white
-            crown.strokeColor = primary
-            crown.lineWidth = 1
-            crown.glowWidth = locked ? 0 : 4
-            crown.zPosition = 2
-            addChild(crown)
-        } else {
-            let core = SKShapeNode(path: Self.polygon(sides: 4, radius: size * 0.09, rotation: .pi / 4))
-            core.position.y = size * 0.14
-            core.fillColor = locked ? primary.withAlphaComponent(0.12) : .white
-            core.strokeColor = primary
-            core.glowWidth = locked ? 0 : 3
-            core.zPosition = 2
-            addChild(core)
+        // Ten inset service marks distinguish every level inside a rank family.
+        let marks = (level - 1) % 10 + 1
+        for index in 0..<10 {
+            let side: CGFloat = index < 5 ? -1 : 1
+            let y = 17 - CGFloat(index % 5) * 7
+            plate([(side*21,y),(side*24,y+1),(side*24,y-2),(side*21,y-3)],
+                  fill: index < marks ? accent : ink, edge: index < marks ? accent : steel, on: art)
         }
-
-        let levelLabel = createNeonLabel(text: locked ? "?" : "\(level)",
-                                         fontSize: max(7, size * 0.14),
-                                         color: locked ? primary : .white)
-        levelLabel.position.y = size * 0.01
-        levelLabel.zPosition = 4
-        addChild(levelLabel)
     }
 
-    private static func polygon(sides: Int, radius: CGFloat, rotation: CGFloat) -> CGPath {
-        let path = CGMutablePath()
-        for index in 0..<sides {
-            let angle = CGFloat(index) * .pi * 2 / CGFloat(sides) + rotation
-            let point = CGPoint(x: cos(angle) * radius, y: sin(angle) * radius)
-            if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+    private func prestigeRank(_ tier: Int, on art: SKNode) {
+        // Distinct silhouettes at each century, inspired by military medals and Polystrike machines.
+        switch tier {
+        case 1: // Elite Sentinel: armored helmet and compact wings.
+            wings(count: 2, on: art); shield(on: art); helmet(style: 1, on: art)
+        case 2: // Arena Vanguard: crossed swords and a steel death mask.
+            swords(on: art); shield(on: art); skull(on: art)
+        case 3: // Rift Admiral: split horned helm.
+            wings(count: 2, on: art); shield(on: art); helmet(style: 2, on: art)
+        case 4: // Neon Overlord: hooded executioner.
+            swords(on: art)
+            plate([(0,47),(24,23),(31,-25),(17,-17),(0,-35),(-17,-17),(-31,-25),(-24,23)], fill: steel, edge: trim, on: art)
+            plate([(0,36),(21,16),(19,-22),(-19,-22),(-21,16)], fill: ink, on: art)
+            let head = SKNode(); head.setScale(0.85); head.position.y = -1; art.addChild(head); skull(on: head)
+        case 5: // Flux General: four-bladed mechanical eagle.
+            wings(count: 4, on: art); shield(on: art); skull(on: art)
+            star(radius: 8, y: 36, on: art)
+        case 6: // Apex Commander: tusked war mask.
+            swords(on: art); shield(on: art)
+            for side: CGFloat in [-1,1] {
+                plate([(side*15,18),(side*23,44),(side*36,31),(side*28,34),(side*26,11)], fill: steel, edge: trim, on: art)
+            }
+            skull(beast: true, on: art)
+        case 7: // Nova Warlord: radiant reactor halo and crowned skull.
+            for index in 0..<12 {
+                let ray = plate([(-3,32),(0,48),(3,32)], fill: steel, edge: trim, on: art)
+                ray.zRotation = CGFloat(index) * .pi / 6
+            }
+            shield(on: art); skull(on: art); crown(points: 3, on: art)
+        case 8: // Void Marshal: a single watching eye in a fractured prism.
+            wings(count: 3, on: art)
+            plate([(0,48),(28,16),(23,-23),(0,-43),(-23,-23),(-28,16)], fill: steel, edge: trim, on: art)
+            plate([(0,34),(20,13),(0,-26),(-20,13)], fill: ink, on: art)
+            plate([(-19,10),(0,21),(19,10),(0,-2)], fill: silver, edge: trim, on: art)
+            let pupil = plate([(0,19),(6,10),(0,0),(-6,10)], fill: accent, edge: accent, on: art)
+            pupil.glowWidth = lockedArtwork ? 0 : 2
+            plate([(0,16),(2,10),(0,3),(-2,10)], fill: ink, edge: ink, on: art)
+        case 9: // Eternal Sovereign: tall crown and winged death mask.
+            wings(count: 3, on: art); swords(on: art); shield(on: art)
+            skull(on: art); crown(points: 5, on: art)
+        default: // Polystrike Legend: gold phoenix armor, tusks and a royal crest.
+            wings(count: 5, on: art); swords(on: art); shield(on: art)
+            skull(beast: true, on: art); crown(points: 5, on: art)
+            star(radius: 6, y: 37, on: art)
+            for side: CGFloat in [-1,1] {
+                plate([(side*24,-9),(side*40,-19),(side*28,-20),(side*32,-31),(side*19,-24)], fill: trim, edge: accent, on: art)
+            }
         }
-        path.closeSubpath()
-        return path
-    }
-
-    private static func star(points: Int, outer: CGFloat, inner: CGFloat, rotation: CGFloat) -> CGPath {
-        let path = CGMutablePath()
-        for index in 0..<(points * 2) {
-            let radius = index.isMultiple(of: 2) ? outer : inner
-            let angle = CGFloat(index) * .pi / CGFloat(points) + rotation
-            let point = CGPoint(x: cos(angle) * radius, y: sin(angle) * radius)
-            if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
-        }
-        path.closeSubpath()
-        return path
-    }
-
-    private static func wing(direction: CGFloat, size: CGFloat, blades: Int) -> CGPath {
-        let path = CGMutablePath()
-        path.move(to: CGPoint(x: direction * size * 0.30, y: size * 0.20))
-        for index in 0..<blades {
-            let spread = CGFloat(index) / CGFloat(max(1, blades - 1))
-            path.addLine(to: CGPoint(x: direction * size * (0.48 + spread * 0.18),
-                                     y: size * (0.34 - spread * 0.19)))
-            path.addLine(to: CGPoint(x: direction * size * (0.37 + spread * 0.08),
-                                     y: size * (0.18 - spread * 0.20)))
-        }
-        path.addLine(to: CGPoint(x: direction * size * 0.30, y: -size * 0.24))
-        path.closeSubpath()
-        return path
-    }
-
-    private static func primaryColor(prestige: Int, rankBand: Int) -> SKColor {
-        guard prestige > 0 else {
-            return [.cyan, NeonColors.green, NeonColors.blue, .cyan, NeonColors.purple,
-                    NeonColors.pink, NeonColors.orange, NeonColors.yellow, .white, .cyan][rankBand]
-        }
-        return [NeonColors.green, NeonColors.blue, .cyan, NeonColors.purple, NeonColors.pink,
-                NeonColors.orange, NeonColors.yellow, .magenta, .white, .white][prestige - 1]
-    }
-
-    private static func secondaryColor(prestige: Int, rankBand: Int) -> SKColor {
-        guard prestige > 0 else { return rankBand >= 6 ? NeonColors.orange : NeonColors.purple }
-        return [NeonColors.blue, .cyan, NeonColors.purple, NeonColors.pink, NeonColors.orange,
-                NeonColors.yellow, .white, .cyan, NeonColors.purple, NeonColors.yellow][prestige - 1]
     }
 }
 

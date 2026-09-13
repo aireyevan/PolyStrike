@@ -9,6 +9,16 @@ class Player: SKShapeNode {
     var projectileSpeed: CGFloat = 800
     var lastShotTime: TimeInterval = 0
     let shipStyle: ShipStyle
+    var projectileColor: SKColor {
+        switch shipStyle {
+        case .striker: return .cyan
+        case .viper: return NeonColors.green
+        case .spectre: return NeonColors.purple
+        case .nova: return NeonColors.orange
+        case .eclipse: return NeonColors.pink
+        case .sovereign: return .white
+        }
+    }
 
     override init() {
         shipStyle = PlayerProgress.shared.selectedShip

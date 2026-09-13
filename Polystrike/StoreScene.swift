@@ -4,7 +4,7 @@ final class StoreScene: SKScene {
     private var category = 0
     private var previewShip = PlayerProgress.shared.selectedShip
     private var notice = "PERMANENT UPGRADES • TAP A CARD TO INSTALL"
-    private let groups: [[ShipUpgrade]] = [[.fire, .damage, .doubleShot, .bomb], [.health, .armor, .repair, .dash], [.speed, .magnet, .salvage]]
+    private let groups: [[ShipUpgrade]] = [[.fire, .damage, .doubleShot, .tripleShot, .quadShot, .bomb], [.health, .armor, .repair, .dash], [.speed, .magnet, .salvage]]
 
     override func didMove(to view: SKView) { rebuild() }
     override func didChangeSize(_ oldSize: CGSize) { if view != nil { rebuild() } }
@@ -119,29 +119,35 @@ final class StoreScene: SKScene {
 
     private func addUpgradeCards(progress: PlayerProgress) {
         let width = size.width * 0.52
-        let step = min(65, (size.height - 133) / 4)
+        let usesGrid = groups[category].count > 4
+        let columns = usesGrid ? 2 : 1
+        let rows = Int(ceil(Double(groups[category].count) / Double(columns)))
+        let columnGap: CGFloat = usesGrid ? 8 : 0
+        let cardWidth = usesGrid ? (width - columnGap) / 2 : width
+        let step = min(65, (size.height - 133) / CGFloat(max(1, rows)))
         for (index, upgrade) in groups[category].enumerated() {
             let level = progress.level(upgrade), maxed = level >= upgrade.cap
-            let card = SKShapeNode(rectOf: CGSize(width: width, height: step - 6), cornerRadius: 2)
+            let row = index / columns, column = index % columns
+            let card = SKShapeNode(rectOf: CGSize(width: cardWidth, height: step - 6), cornerRadius: 2)
             card.name = "upgrade\(index)"
-            card.position = CGPoint(x: size.width * 0.687, y: size.height - 124 - CGFloat(index) * step)
+            card.position = CGPoint(x: size.width * 0.687 - width / 2 + cardWidth / 2 + CGFloat(column) * (cardWidth + columnGap), y: size.height - 124 - CGFloat(row) * step)
             card.fillColor = SKColor(red: 0.008, green: 0.015, blue: 0.03, alpha: 0.96)
             card.strokeColor = maxed ? NeonColors.green.withAlphaComponent(0.35) : (progress.flux >= progress.cost(upgrade) ? .cyan.withAlphaComponent(0.6) : NeonColors.mutedText.withAlphaComponent(0.3))
             addChild(card)
             let accent = SKShapeNode(rectOf: CGSize(width: 3, height: step - 16))
-            accent.position.x = -width / 2 + 5
+            accent.position.x = -cardWidth / 2 + 5
             accent.fillColor = maxed ? NeonColors.green : (progress.flux >= progress.cost(upgrade) ? .cyan : NeonColors.mutedText)
             accent.strokeColor = .clear
             card.addChild(accent)
-            let heading = createNeonLabel(text: "\(upgrade.title)  \(level)/\(upgrade.cap)", fontSize: 10, color: .white)
-            heading.horizontalAlignmentMode = .left; heading.position = CGPoint(x: -width / 2 + 12, y: 11); card.addChild(heading)
-            let effect = createNeonLabel(text: maxed ? upgrade.effect(at: level) : upgrade.effect(at: level) + " → " + upgrade.effect(at: level + 1), fontSize: 9, color: NeonColors.mutedText)
-            effect.horizontalAlignmentMode = .left; effect.position = CGPoint(x: -width / 2 + 12, y: -10)
-            if effect.frame.width > width - 105 { effect.setScale((width - 105) / effect.frame.width) }
+            let heading = createNeonLabel(text: "\(upgrade.title)  \(level)/\(upgrade.cap)", fontSize: usesGrid ? 8 : 10, color: .white)
+            heading.horizontalAlignmentMode = .left; heading.position = CGPoint(x: -cardWidth / 2 + 12, y: 11); card.addChild(heading)
+            let effect = createNeonLabel(text: maxed ? upgrade.effect(at: level) : upgrade.effect(at: level) + " → " + upgrade.effect(at: level + 1), fontSize: usesGrid ? 7 : 9, color: NeonColors.mutedText)
+            effect.horizontalAlignmentMode = .left; effect.position = CGPoint(x: -cardWidth / 2 + 12, y: -10)
+            if effect.frame.width > cardWidth - 92 { effect.setScale((cardWidth - 92) / effect.frame.width) }
             card.addChild(effect)
-            let price = createNeonLabel(text: maxed ? "MAX" : "◈ \(progress.cost(upgrade))", fontSize: 10, color: NeonColors.green)
-            price.horizontalAlignmentMode = .right; price.position = CGPoint(x: width / 2 - 12, y: -10); card.addChild(price)
-            let progressWidth = width - 24
+            let price = createNeonLabel(text: maxed ? "MAX" : "◈ \(formatted(progress.cost(upgrade)))", fontSize: usesGrid ? 8 : 10, color: NeonColors.green)
+            price.horizontalAlignmentMode = .right; price.position = CGPoint(x: cardWidth / 2 - 12, y: -10); card.addChild(price)
+            let progressWidth = cardWidth - 24
             let track = SKShapeNode(rectOf: CGSize(width: progressWidth, height: 1))
             track.position = CGPoint(x: 0, y: -(step - 6) / 2 + 5)
             track.fillColor = SKColor.white.withAlphaComponent(0.08)
@@ -268,6 +274,8 @@ final class StoreScene: SKScene {
                 let upgrade = groups[category][index]
                 let progress = PlayerProgress.shared
                 if progress.level(upgrade) >= upgrade.cap { notice = "SYSTEM FULLY UPGRADED" }
+                else if upgrade == .tripleShot && !progress.doubleShotUnlocked { notice = "DOUBLE SHOT REQUIRED FIRST" }
+                else if upgrade == .quadShot && !progress.tripleShotUnlocked { notice = "TRIPLE SHOT REQUIRED FIRST" }
                 else if progress.buy(upgrade) { notice = "\(upgrade.title) INSTALLED" + ([ShipUpgrade.dash, .bomb].contains(upgrade) ? " • TAP ITS BUTTON DURING A RUN" : "") }
                 else { notice = "NEED \(formatted(progress.cost(upgrade) - progress.flux)) MORE FLUX" }
                 rebuild(); return

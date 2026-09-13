@@ -56,6 +56,8 @@ class PlayerProgress {
     // MARK: - Special Upgrades
     
     private(set) var doubleShotUnlocked: Bool = false
+    private(set) var tripleShotUnlocked: Bool = false
+    private(set) var quadShotUnlocked: Bool = false
     
     private let pointsKey = "playerPoints"
     private let fireRateKey = "fireRateLevel"
@@ -63,6 +65,8 @@ class PlayerProgress {
     private let damageKey = "damageLevel"
     private let speedKey = "speedLevel"
     private let doubleShotKey = "doubleShotUnlocked"
+    private let tripleShotKey = "tripleShotUnlocked"
+    private let quadShotKey = "quadShotUnlocked"
     private let ownedShipsKey = "ownedShipStyles"
     private let selectedShipKey = "selectedShipStyle"
     private let xpKey = "career.totalXP"
@@ -83,6 +87,7 @@ class PlayerProgress {
     var totalFluxEarned: Int { defaults.integer(forKey: totalFluxKey) }
     var rankLevel: Int { Self.level(forXP: totalXP) }
     var rankTitle: String { Self.rankTitle(for: rankLevel) }
+    var projectileCount: Int { quadShotUnlocked ? 4 : (tripleShotUnlocked ? 3 : (doubleShotUnlocked ? 2 : 1)) }
     var xpIntoLevel: Int { totalXP - Self.xpRequired(for: rankLevel) }
     var xpForNextLevel: Int {
         guard rankLevel < 1000 else { return 0 }
@@ -154,7 +159,8 @@ class PlayerProgress {
         let steps = max(0, min(999, level - 1))
         // Deliberately paced beyond the first live-play calibration so early
         // levels remain meaningful and the century ranks stay aspirational.
-        return 3_900 * steps * steps + 18_328 * steps
+        // Checkpoint 20 balance pass: every rank now requires 25% more XP.
+        return 4_875 * steps * steps + 22_910 * steps
     }
 
     static func level(forXP xp: Int) -> Int {
@@ -359,6 +365,8 @@ class PlayerProgress {
         defaults.set(damageLevel, forKey: damageKey)
         defaults.set(speedLevel, forKey: speedKey)
         defaults.set(doubleShotUnlocked, forKey: doubleShotKey)
+        defaults.set(tripleShotUnlocked, forKey: tripleShotKey)
+        defaults.set(quadShotUnlocked, forKey: quadShotKey)
         defaults.set(totalXP, forKey: xpKey)
     }
     
@@ -392,6 +400,8 @@ class PlayerProgress {
         doubleShotUnlocked = defaults.bool(
             forKey: doubleShotKey
         )
+        tripleShotUnlocked = defaults.bool(forKey: tripleShotKey)
+        quadShotUnlocked = defaults.bool(forKey: quadShotKey)
 
         totalXP = max(0, defaults.integer(forKey: xpKey))
         if defaults.object(forKey: totalFluxKey) == nil {
@@ -405,12 +415,14 @@ class PlayerProgress {
 
 
 enum ShipUpgrade: String, CaseIterable {
-    case fire, damage, doubleShot, bomb, health, armor, repair, dash, speed, magnet, salvage
+    case fire, damage, doubleShot, tripleShot, quadShot, bomb, health, armor, repair, dash, speed, magnet, salvage
     var title: String {
         switch self {
         case .fire: return "RAPID FIRE"
         case .damage: return "HEAVY ROUNDS"
         case .doubleShot: return "DOUBLE SHOT"
+        case .tripleShot: return "TRIPLE SHOT"
+        case .quadShot: return "QUAD SHOT"
         case .bomb: return "SHOCKWAVE"
         case .health: return "REINFORCED HULL"
         case .armor: return "ARMOR PLATING"
@@ -424,7 +436,7 @@ enum ShipUpgrade: String, CaseIterable {
     var cap: Int {
         switch self {
         case .fire, .damage, .health, .speed: return 60
-        case .doubleShot: return 1
+        case .doubleShot, .tripleShot, .quadShot: return 1
         default: return 20
         }
     }
@@ -435,6 +447,8 @@ enum ShipUpgrade: String, CaseIterable {
         case .health: return "\(100 + level * 10) HP"
         case .speed: return "\(300 + min(20, level) * 12 + max(0, level-20) * 3) speed"
         case .doubleShot: return level == 0 ? "1 projectile" : "2 projectiles"
+        case .tripleShot: return level == 0 ? "Requires Double Shot" : "3 projectiles"
+        case .quadShot: return level == 0 ? "Requires Triple Shot" : "4 projectiles"
         case .armor: return "\(level * 2)% resistance"
         case .repair: return String(format: "%.2f HP/s", Double(level) * 0.25)
         case .magnet: return "\(110 + level * 8) range"
@@ -453,6 +467,8 @@ extension PlayerProgress {
         case .health: return healthLevel
         case .speed: return speedLevel
         case .doubleShot: return doubleShotUnlocked ? 1 : 0
+        case .tripleShot: return tripleShotUnlocked ? 1 : 0
+        case .quadShot: return quadShotUnlocked ? 1 : 0
         default: return min(upgrade.cap, max(0, defaults.integer(forKey: "shipUpgrade." + upgrade.rawValue)))
         }
     }
@@ -463,6 +479,8 @@ extension PlayerProgress {
         case .health: return healthCost()
         case .speed: return speedCost()
         case .doubleShot: return doubleShotCost()
+        case .tripleShot: return 600_000
+        case .quadShot: return 4_000_000
         default:
             let l = level(upgrade)
             return (upgrade == .dash ? 1500 : 1200) + l * 700 + l * l * 50
@@ -475,6 +493,12 @@ extension PlayerProgress {
         case .health: return buyHealth()
         case .speed: return buySpeed()
         case .doubleShot: return buyDoubleShot()
+        case .tripleShot:
+            guard doubleShotUnlocked, !tripleShotUnlocked, points >= 600_000 else { return false }
+            points -= 600_000; tripleShotUnlocked = true; save(); return true
+        case .quadShot:
+            guard tripleShotUnlocked, !quadShotUnlocked, points >= 4_000_000 else { return false }
+            points -= 4_000_000; quadShotUnlocked = true; save(); return true
         default:
             let l = level(upgrade), price = cost(upgrade)
             guard l < upgrade.cap, points >= price else { return false }

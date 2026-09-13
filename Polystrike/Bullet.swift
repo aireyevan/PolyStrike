@@ -7,7 +7,7 @@ class Bullet: SKShapeNode {
     var bulletSpeed: CGFloat = 800
     var lifetime: TimeInterval = 2.0
     
-    init(damage: CGFloat) {
+    init(damage: CGFloat, color: SKColor = .cyan) {
         
         self.damage = damage
         
@@ -27,14 +27,14 @@ class Bullet: SKShapeNode {
         
         self.path = path
         
-        fillColor = .white
-        strokeColor = .cyan
+        fillColor = color
+        strokeColor = color
         lineWidth = 1
         glowWidth = 7
 
         let streak = SKShapeNode(rectOf: CGSize(width: 30, height: 3), cornerRadius: 1.5)
         streak.position = CGPoint(x: -15, y: 0)
-        streak.fillColor = SKColor.cyan.withAlphaComponent(0.7)
+        streak.fillColor = color.withAlphaComponent(0.7)
         streak.strokeColor = .clear
         streak.glowWidth = 5
         streak.zPosition = -1
@@ -60,7 +60,7 @@ class Bullet: SKShapeNode {
         trail.particleAlphaSpeed = -4.2
         trail.particleScale = 0.75
         trail.particleScaleSpeed = -2.8
-        trail.particleColor = .cyan
+        trail.particleColor = color
         trail.particleColorBlendFactor = 1
         trail.targetNode = nil
         trail.name = "bulletTrail"

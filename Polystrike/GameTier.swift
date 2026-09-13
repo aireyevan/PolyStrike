@@ -155,7 +155,10 @@ struct TierWavePlan: Equatable {
         if tier.isMultiple(of: 10) {
             return TierWavePlan(regularEnemies: 0, bossCount: 1)
         }
-        let regular = min(72, 8 + tier * 4 + (tier / 4) * 3)
+        // Increase the finite budget after tier 10 without changing the live
+        // spawn cap. Later rounds last longer instead of flooding the arena.
+        let lateTierExtension = max(0, tier - 10) * 3
+        let regular = min(180, 8 + tier * 4 + (tier / 4) * 3 + lateTierExtension)
         let bosses: Int
         if tier >= 3 && (tier.isMultiple(of: 3) || tier.isMultiple(of: 5)) {
             bosses = 1

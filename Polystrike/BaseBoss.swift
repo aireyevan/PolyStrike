@@ -79,6 +79,8 @@ class BaseBoss {
         attackClock = 0
         actionClock = 0
         world.effect(enemy.position, type.color)
+        enemy.childNode(withName: "bossCracks")?.run(.fadeAlpha(to: phase == 3 ? 1 : 0.55, duration: 0.3))
+        enemy.childNode(withName: "bossArmor")?.speed = phase == 3 ? 1.8 : 1.35
         enemy.run(.sequence([.scale(to: 1.34, duration: 0.12), .scale(to: 1, duration: 0.25)]))
     }
 
@@ -146,10 +148,10 @@ class BaseBoss {
         case .core: radius = 60; sides = 12
         }
         enemy.path = Self.polygon(sides: sides, radius: radius, rotation: -.pi / 2)
-        enemy.fillColor = type.color.withAlphaComponent(0.22)
+        enemy.fillColor = SKColor(red: 0.065, green: 0.075, blue: 0.10, alpha: 1)
         enemy.strokeColor = type.color
-        enemy.lineWidth = 4
-        enemy.glowWidth = 12
+        enemy.lineWidth = 2
+        enemy.glowWidth = 2
         enemy.physicsBody = SKPhysicsBody(circleOfRadius: radius)
         enemy.physicsBody?.affectedByGravity = false
         enemy.physicsBody?.categoryBitMask = 1 << 1
@@ -165,27 +167,106 @@ class BaseBoss {
         shield.alpha = 0
         enemy.addChild(shield)
 
-        let inner = SKShapeNode(path: Self.polygon(sides: max(3, sides), radius: radius * 0.55, rotation: .pi / 4))
-        inner.fillColor = SKColor.black.withAlphaComponent(0.45)
-        inner.strokeColor = .white
-        inner.lineWidth = 2
-        inner.glowWidth = 5
-        enemy.addChild(inner)
-        inner.run(.repeatForever(.rotate(byAngle: -.pi * 2, duration: type == .core ? 2.6 : 4.2)))
-
-        let satellites = type == .hive ? 6 : (type == .sentinel ? 4 : (type == .core ? 8 : 3))
-        let orbitNode = SKNode()
-        enemy.addChild(orbitNode)
-        for index in 0..<satellites {
-            let angle = CGFloat(index) * .pi * 2 / CGFloat(satellites)
-            let part = SKShapeNode(path: Self.polygon(sides: type == .pursuer ? 3 : 4, radius: type == .core ? 6 : 5, rotation: angle))
-            part.position = CGPoint(x: cos(angle) * (radius + 7), y: sin(angle) * (radius + 7))
-            part.fillColor = .white
-            part.strokeColor = type.color
-            part.glowWidth = 5
-            orbitNode.addChild(part)
+        // Armor remains within the collision radius except for decorative tips.
+        let armor = SKNode()
+        armor.name = "bossArmor"
+        enemy.addChild(armor)
+        let steel = SKColor(red: 0.16, green: 0.18, blue: 0.23, alpha: 1)
+        let dark = SKColor(red: 0.035, green: 0.04, blue: 0.065, alpha: 1)
+        func plate(_ values: [(CGFloat, CGFloat)], parent: SKNode, fill: SKColor) -> SKShapeNode {
+            let path = CGMutablePath()
+            for (index, value) in values.enumerated() {
+                let point = CGPoint(x: value.0 * radius, y: value.1 * radius)
+                if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+            }
+            path.closeSubpath()
+            let node = SKShapeNode(path: path)
+            node.fillColor = fill
+            node.strokeColor = type.color.withAlphaComponent(0.6)
+            node.lineWidth = 1.2
+            node.glowWidth = 0.5
+            parent.addChild(node)
+            return node
         }
-        orbitNode.run(.repeatForever(.rotate(byAngle: .pi * 2, duration: type == .pursuer ? 2.2 : 5.5)))
+        switch type {
+        case .pursuer:
+            enemy.path = Self.polygon(sides: 3, radius: radius, rotation: 0)
+            for side: CGFloat in [-1, 1] {
+                let claw = plate([(-0.75, side * 0.32), (-0.55, side * 0.90),
+                                  (0.72, side * 0.68), (1.10, side * 0.18),
+                                  (0.46, side * 0.40), (-0.05, side * 0.25)], parent: armor, fill: steel)
+                claw.run(.repeatForever(.sequence([.rotate(byAngle: side * 0.08, duration: 0.8),
+                                                   .rotate(byAngle: -side * 0.08, duration: 0.8)])))
+            }
+            _ = plate([(-0.92, 0), (-0.38, 0.36), (0.60, 0.19), (0.87, 0),
+                       (0.60, -0.19), (-0.38, -0.36)], parent: armor, fill: dark)
+        case .sentinel:
+            for side: CGFloat in [-1, 1] {
+                _ = plate([(side * 0.18, 0.43), (side * 0.50, 1.13), (side * 0.60, 0.57),
+                           (side * 0.94, 0.30), (side * 0.80, -0.60),
+                           (side * 0.40, -0.83), (side * 0.31, 0.03)], parent: armor, fill: steel)
+                _ = plate([(side * 0.57, 0.20), (side * 0.83, 0.18),
+                           (side * 0.83, -0.69), (side * 0.57, -0.69)], parent: armor, fill: dark)
+            }
+        case .hive:
+            for side: CGFloat in [-1, 1] {
+                for index in 0..<3 {
+                    let y = CGFloat(index) * 0.46 - 0.52
+                    let limb = plate([(side * 0.34, y + 0.20), (side * 0.83, y + 0.32),
+                                      (side * 1.09, y - 0.08), (side * 0.74, y + 0.03),
+                                      (side * 0.32, y - 0.03)], parent: armor, fill: steel)
+                    let duration = 0.65 + Double(index) * 0.1
+                    limb.run(.repeatForever(.sequence([.rotate(byAngle: side * 0.05, duration: duration),
+                                                       .rotate(byAngle: -side * 0.05, duration: duration)])))
+                }
+            }
+            _ = plate([(0, 0.95), (0.49, 0.40), (0.42, -0.52), (0, -0.96),
+                       (-0.42, -0.52), (-0.49, 0.40)], parent: armor, fill: dark)
+        case .architect, .core:
+            let count = type == .core ? 8 : 4
+            for index in 0..<count {
+                let blade = plate([(0.35, -0.18), (0.80, -0.29), (1.10, 0.13),
+                                   (0.77, 0.03), (0.61, 0.37), (0.35, 0.18)], parent: armor, fill: steel)
+                blade.zRotation = CGFloat(index) * .pi * 2 / CGFloat(count)
+            }
+            armor.run(.repeatForever(.rotate(byAngle: .pi * 2, duration: type == .core ? 18 : 24)))
+        }
+
+        // Recessed face and teeth retain a hostile expression at gameplay scale.
+        let face = SKNode()
+        face.zPosition = 3
+        face.zRotation = type == .pursuer ? .pi / 2 : 0
+        enemy.addChild(face)
+        _ = plate([(-0.37, 0.35), (0, 0.49), (0.37, 0.35), (0.30, -0.35),
+                   (0, -0.55), (-0.30, -0.35)], parent: face, fill: dark)
+        let eyes = SKNode()
+        eyes.name = "bossEyes"
+        face.addChild(eyes)
+        for side: CGFloat in [-1, 1] {
+            let eye = plate([(side * 0.06, 0.08), (side * 0.29, 0.22),
+                             (side * 0.24, 0.02), (side * 0.07, -0.02)], parent: eyes, fill: type.color)
+            eye.strokeColor = .white
+            eye.lineWidth = 0.6
+            eye.glowWidth = 5
+            for index in 0..<3 {
+                let x = side * (0.06 + CGFloat(index) * 0.075)
+                _ = plate([(x, -0.19), (x + side * 0.05, -0.17),
+                           (x + side * 0.02, -0.34)], parent: face, fill: steel)
+            }
+        }
+        eyes.run(.repeatForever(.sequence([.fadeAlpha(to: 0.55, duration: 0.9), .fadeAlpha(to: 1, duration: 0.35)])))
+
+        let cracks = SKNode()
+        cracks.name = "bossCracks"
+        cracks.zPosition = 2
+        cracks.alpha = 0.15
+        enemy.addChild(cracks)
+        for index in 0..<6 {
+            let crack = plate([(0.35, -0.015), (0.56, 0.08), (0.67, 0.02),
+                               (0.91, 0.12), (0.66, 0.06), (0.55, 0.12)], parent: cracks, fill: type.color)
+            crack.zRotation = CGFloat(index) * .pi / 3
+            crack.glowWidth = 3
+        }
     }
 
     private static func polygon(sides: Int, radius: CGFloat, rotation: CGFloat) -> CGPath {

@@ -68,7 +68,7 @@ final class StoryMissionSelectScene: SKScene {
         addLabel(mission.name,to:panel,at:CGPoint(x:x,y:size.height/2-58),size:18,color:.white,alignment:.left)
         addLabel(mission.type.title,to:panel,at:CGPoint(x:x,y:size.height/2-80),size:8,color:NeonColors.cyan,alignment:.left)
         addLabel(mission.description,to:panel,at:CGPoint(x:x,y:size.height/2-111),size:9,color:NeonColors.mutedText,alignment:.left)
-        let metadata=mission.duration>0 ? "TIME  \(Int(mission.duration)) SEC" : (mission.enemyCount>0 ? "HOSTILES  \(mission.enemyCount)":"TACTICAL OBJECTIVE")
+        let metadata=mission.duration>0 ? "TIME  \(Int(mission.duration)) SEC" : (mission.enemyCount>0 ? "ENEMIES  \(mission.enemyCount)":"TACTICAL OBJECTIVE")
         addLabel(metadata,to:panel,at:CGPoint(x:x,y:size.height/2-140),size:7,color:NeonColors.green,alignment:.left)
         let launch=SKShapeNode(rectOf:CGSize(width:min(245,size.width-44),height:42),cornerRadius:2);launch.name="launchMission";launch.position=CGPoint(x:0,y:-size.height/2+34);launch.fillColor=NeonColors.orange.withAlphaComponent(0.15);launch.strokeColor=NeonColors.orange;launch.glowWidth=3;panel.addChild(launch)
         let label=createNeonLabel(text:index<highestUnlocked ? "REPLAY MISSION":"DEPLOY",fontSize:10,color:.white);label.name="launchMission";launch.addChild(label)

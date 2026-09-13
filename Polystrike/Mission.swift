@@ -21,7 +21,7 @@ enum StoryCampaign {
                 enemyCount: enemies, duration: time, objectiveCount: objectives, arena: arena, bossName: boss)
     }
     static let missions: [Mission] = [
-        m(1,1,"FIRST CONTACT",.elimination,"DESTROY ALL HOSTILES",enemies:28,arena:.openGrid),
+        m(1,1,"FIRST CONTACT",.elimination,"DESTROY ALL ENEMIES",enemies:28,arena:.openGrid),
         m(1,2,"PRESSURE WAVE",.survival,"SURVIVE THE ONSLAUGHT",time:60,arena:.crossfire),
         m(1,3,"HUNTER SIGNAL",.eliteHunt,"DESTROY THE ELITE",arena:.pursuitLanes,boss:"VANGUARD"),
         m(1,4,"GATEKEEPER",.boss,"DEFEAT THE SECTOR GUARDIAN",arena:.bossHex,boss:"HEX WARDEN"),
