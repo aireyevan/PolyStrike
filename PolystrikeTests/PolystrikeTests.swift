@@ -1,4 +1,5 @@
 import Testing
+import UIKit
 import SpriteKit
 @testable import Polystrike
 
@@ -417,5 +418,233 @@ struct MapVarietyTests {
         #expect(LivingArena.bossPhases.count == 4)
         #expect(Set(LivingArena.combatPhases).isDisjoint(with:LivingArena.bossPhases))
         #expect(LivingArena(phase:0,center:.zero).bounds.width > 1440)
+    }
+}
+
+struct CombatUpgradeTests {
+    @Test func indexedWallsMatchFullScanAndRebuild() {
+        var walls: [CGRect] = []
+        for i in 0..<100 { let x=(i*173)%1800-900; let y=(i*97)%1200-600; walls.append(CGRect(x:x,y:y,width:96,height:96)) }
+        let grid=WallSpatialIndex(walls:walls)
+        for i in 0..<1000 {
+            let point=CGPoint(x:(i*37)%2200-1100,y:(i*61)%1600-800)
+            #expect(grid.contains(point,clearance:22)==walls.contains { $0.insetBy(dx:-22,dy:-22).contains(point) })
+        }
+        let barrier=WallSpatialIndex(walls:[CGRect(x:0,y:-50,width:1,height:100)])
+        #expect(!barrier.clearPath(from:CGPoint(x:-100,y:0),to:CGPoint(x:100,y:0),clearance:0))
+        #expect(barrier.clearPath(from:CGPoint(x:-100,y:80),to:CGPoint(x:100,y:80),clearance:22))
+        #expect(!barrier.clearPath(from:CGPoint(x:0,y:0),to:CGPoint(x:0,y:0)))
+        #expect(WallSpatialIndex().clearPath(from:CGPoint(x:-100,y:0),to:CGPoint(x:100,y:0)))
+    }
+    @Test @MainActor func combatEffectsStayBoundedAndOutsidePhysics() {
+        let hull=CGPath(ellipseIn:CGRect(x:-15,y:-15,width:30,height:30),transform:nil)
+        let dash=CombatEffects.dash(from:.zero,to:CGPoint(x:160,y:0),hull:hull,angle:0,color:.cyan)
+        let wave=CombatEffects.shockwave(radius:180,color:.cyan)
+        #expect(dash.children.count==7)
+        #expect(wave.children.count==4)
+        for effect in [dash,wave] {
+            #expect(effect.hasActions())
+            #expect(effect.physicsBody == nil)
+            #expect(effect.children.allSatisfy { $0.physicsBody == nil && !($0 is SKEmitterNode) })
+        }
+    }
+}
+
+struct StoryReworkTests {
+    private func defaults()->UserDefaults {
+        let d=UserDefaults(suiteName:"StoryTests.\(UUID().uuidString)")!
+        d.set(StoryCampaign.version,forKey:"storyCampaignVersion")
+        return d
+    }
+    @Test func campaignHasCompleteDistinctOperationRoutes() {
+        #expect(StoryCampaign.missions.count==40)
+        #expect(StoryCampaign.missions.reduce(0){$0+$1.stages.count}==120)
+        #expect(Set(StoryCampaign.missions.map(\.id)).count==40)
+        var layouts=Set<String>()
+        for sector in 1...5 {
+            let missions=StoryCampaign.missions.filter{$0.sector==sector}
+            #expect(missions.count==8)
+            #expect(missions.last?.stages.last?.type == .boss)
+            for mission in missions {
+                #expect(mission.stages.count==3)
+                #expect(mission.reward>0)
+                for stage in mission.stages {
+                    #expect(stage.arenaPhase>=0 && stage.arenaPhase<LivingArena.blueprintCount)
+                    #expect(stage.arenaVariant>=0 && stage.arenaVariant<4)
+                    if stage.type == .capture || stage.type == .assault {#expect(stage.objectiveCount>=2)}
+                    layouts.insert("\(stage.arenaPhase)/\(stage.arenaVariant)")
+                }
+            }
+        }
+        #expect(layouts.count>=45)
+    }
+    @Test func all120StagesCanCompleteAndAdvanceExactlyOnce() {
+        for index in StoryCampaign.missions.indices {
+            let manager=StoryModeManager(missionIndex:index,defaults:defaults())
+            for stageIndex in 0..<3 {
+                #expect(manager.stageIndex==stageIndex)
+                manager.begin()
+                let stage=manager.stage
+                switch stage.type {
+                case .elimination:
+                    for _ in 0..<stage.enemyCount {manager.registeredSpawn();manager.spawnArrived();manager.enemyDefeated(elite:false,objectiveTarget:false)}
+                case .capture:
+                    for i in 0..<stage.objectiveCount {manager.holdCaptureZone(i,delta:100)}
+                case .assault:
+                    for _ in 0..<stage.objectiveCount {manager.enemyDefeated(elite:false,objectiveTarget:true)}
+                case .eliteHunt,.boss:manager.enemyDefeated(elite:true,objectiveTarget:false)
+                case .survival,.defense,.escape:
+                    for _ in 0..<Int(stage.duration*20+10) {manager.tick(0.05,enemiesAlive:0)}
+                    if stage.type == .escape {manager.reachedExtraction()}
+                }
+                manager.tick(0.05,enemiesAlive:0)
+                #expect(manager.phase == (stageIndex==2 ? .complete:.checkpoint))
+                if stageIndex<2 {#expect(manager.advanceStage());#expect(!manager.advanceStage())}
+            }
+        }
+    }
+    @Test func captureContestsCheckpointsAndPendingSpawnsAreSafe() {
+        let d=defaults(),manager=StoryModeManager(missionIndex:0,defaults:defaults())
+        manager.begin()
+        for _ in 0..<manager.stage.enemyCount {manager.registeredSpawn();manager.enemyDefeated(elite:false,objectiveTarget:false)}
+        manager.tick(0.05,enemiesAlive:0)
+        #expect(manager.phase == .active)
+        for _ in 0..<manager.stage.enemyCount {manager.spawnArrived()}
+        manager.tick(0.05,enemiesAlive:0);#expect(manager.phase == .checkpoint)
+        let checkpoint=StoryModeManager(missionIndex:0,defaults:d)
+        checkpoint.begin();checkpoint.complete();#expect(checkpoint.advanceStage());checkpoint.begin()
+        checkpoint.holdCaptureZone(0,delta:5,contested:true);#expect(checkpoint.captureProgress[0]==0)
+        checkpoint.holdCaptureZone(0,delta:2);#expect(checkpoint.captureProgress[0]>0)
+        checkpoint.fail();checkpoint.retryCurrentStage();#expect(checkpoint.stageIndex==1);#expect(checkpoint.captureProgress[0]==0)
+        let resumed=StoryModeManager(defaults:d);#expect(resumed.stageIndex==1)
+        resumed.reachedExtraction();#expect(resumed.phase == .briefing)
+    }
+    @Test func campaignMigrationAndFirstClearRewardAreIdempotent() {
+        let d=defaults();d.set(0,forKey:"storyCampaignVersion");d.set(12,forKey:"polystrikeStoryMission")
+        StoryCampaign.migrateProgress(defaults:d);#expect(d.integer(forKey:"polystrikeStoryMission")==23)
+        StoryCampaign.migrateProgress(defaults:d);#expect(d.integer(forKey:"polystrikeStoryMission")==23)
+        let fresh=defaults(),m=StoryModeManager(missionIndex:0,defaults:defaults())
+        #expect(m.recordVictory(healthRatio:1).reward==0)
+        let run=StoryModeManager(missionIndex:0,defaults:fresh)
+        for i in 0..<3 {run.begin();run.complete();if i<2 {_ = run.advanceStage()}}
+        #expect(run.recordVictory(healthRatio:1).reward==run.mission.reward)
+        #expect(run.recordVictory(healthRatio:1).reward==0)
+        #expect(fresh.integer(forKey:"polystrikeStoryMission")==1)
+        #expect(run.advance());#expect(run.stageIndex==0)
+    }
+    @Test @MainActor func objectiveModelsHaveArmorAndBoundedAnimationNodes() {
+        for kind:StoryObjectiveNode.Kind in [.reactor,.relay,.installation,.gate] {
+            let node=StoryObjectiveNode(kind:kind)
+            #expect(node.children.count<20)
+            #expect(node.childNode(withName:"//machineArmor") != nil)
+            #expect(node.children.contains{$0.hasActions()})
+            #expect(node.physicsBody == nil)
+            node.render(progress:0.5,state:"TEST",contested:true)
+            node.render(progress:1,state:"SECURED")
+        }
+    }
+    @Test @MainActor func campaignObjectivesInstallForEveryStageType() {
+        let view=SKView(frame:CGRect(x:0,y:0,width:852,height:393))
+        var tested=Set<MissionType>()
+        for (index,mission) in StoryCampaign.missions.enumerated() {
+            for stageIndex in mission.stages.indices where !tested.contains(mission.stages[stageIndex].type) {
+                let manager=StoryModeManager(missionIndex:index,defaults:defaults())
+                for _ in 0..<stageIndex {manager.begin();manager.complete();_ = manager.advanceStage()}
+                let scene=GameScene(size:view.bounds.size,storyModeManager:manager);view.presentScene(scene)
+                let world=scene.childNode(withName:"worldNode")!
+                switch manager.stage.type {
+                case .capture,.defense:#expect(world.children.compactMap{$0 as? StoryObjectiveNode}.count==manager.stage.objectiveCount)
+                case .assault:#expect(world.children.filter{$0.name=="storyPowerTarget"}.count==manager.stage.objectiveCount)
+                case .boss,.eliteHunt:#expect(world.children.contains{$0.userData?["managedBoss"] as? Bool == true})
+                default:break
+                }
+                tested.insert(manager.stage.type)
+                view.presentScene(nil)
+            }
+        }
+        #expect(tested.count==8)
+    }
+}
+
+struct StoryIntegrationTests {
+    @Test @MainActor func assaultDamageRegistersAndBriefingBlocksAbilities() {
+        let suite="StoryDamage.\(UUID().uuidString)"
+        let d=UserDefaults(suiteName:suite)!
+        defer {d.removePersistentDomain(forName:suite)}
+        d.set(StoryCampaign.version,forKey:"storyCampaignVersion");d.set(1,forKey:"shipUpgrade.bomb")
+        let manager=StoryModeManager(missionIndex:2,defaults:d)
+        let view=SKView(frame:CGRect(x:0,y:0,width:852,height:393)),game=GameScene(size:CGSize(width:852,height:393),storyModeManager:manager)
+        game.progression=PlayerProgress(defaults:d);view.presentScene(game)
+        let target=game.childNode(withName:"//storyPowerTarget") as! Enemy
+        let player=game.childNode(withName:"//player")!;player.position=target.position;target.health=1
+        game.activateBomb();#expect(target.parent != nil);#expect(manager.completedObjectives==0)
+        manager.begin();game.activateBomb();#expect(target.parent == nil);#expect(manager.completedObjectives==1)
+        view.presentScene(nil)
+    }
+    @Test @MainActor func missionArchiveFitsSmallPhoneAndKeepsLaunchVisible() {
+        let size=CGSize(width:667,height:375),view=SKView(frame:CGRect(x:0,y:0,width:667,height:375))
+        let scene=StoryMissionSelectScene(size:size);view.presentScene(scene)
+        let button=scene.childNode(withName:"//launchMission")
+        #expect(button != nil)
+        if let button,let parent=button.parent {
+            let position=parent.convert(button.position,to:scene)
+            #expect(position.y>15 && position.y<size.height-15)
+            #expect(position.x>0 && position.x<size.width)
+        }
+        #expect(scene.childNode(withName:"//missionPage_1") != nil)
+        view.presentScene(nil)
+    }
+}
+
+struct StoryTransitionTests {
+    @Test @MainActor func checkpointRunsIntoNextArenaWithoutLosingProgress() async throws {
+        let suite="StoryTransition.\(UUID().uuidString)"
+        let d=UserDefaults(suiteName:suite)!
+        defer {d.removePersistentDomain(forName:suite)}
+        d.set(StoryCampaign.version,forKey:"storyCampaignVersion")
+        let window=try #require(UIApplication.shared.connectedScenes.compactMap{$0 as? UIWindowScene}.flatMap(\.windows).first{$0.isKeyWindow})
+        let view=SKView(frame:window.bounds)
+        let manager=StoryModeManager(missionIndex:0,defaults:d)
+        let game=GameScene(size:view.bounds.size,storyModeManager:manager)
+        window.addSubview(view);view.presentScene(game)
+        defer {view.presentScene(nil);view.removeFromSuperview()}
+        manager.begin();manager.complete()
+        try await Task.sleep(nanoseconds:6_700_000_000)
+        #expect(manager.stageIndex==1)
+        #expect(manager.phase == .active)
+        #expect(game.activeArena.phase==manager.stage.arenaPhase)
+        #expect(game.childNode(withName:"worldNode")?.isPaused == false)
+        #expect(game.childNode(withName:"worldNode")?.children.compactMap{$0 as? StoryObjectiveNode}.count==2)
+    }
+}
+
+struct StoryFormationTests {
+    @Test func everyCampaignArenaSupportsSafeFormationEntries() {
+        for mission in StoryCampaign.missions {
+            for stage in mission.stages {
+                let arena=LivingArena(phase:stage.arenaPhase,center:.zero,variant:stage.arenaVariant)
+                let player=arena.nearestFloor(to:CGPoint(x:-260,y:0))
+                for pattern in 0..<4 {
+                    let points=StoryFormation.positions(in:arena,pattern:pattern,group:1,count:6,player:player)
+                    #expect(points.count==6)
+                    for (i,point) in points.enumerated() {
+                        #expect(arena.containsShip(at:point))
+                        #expect(hypot(point.x-player.x,point.y-player.y)>420)
+                        for other in points.prefix(i) {#expect(hypot(point.x-other.x,point.y-other.y)>65)}
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct HomeMovieTests {
+    @Test @MainActor func homeContainsBundledMovieAndKeepsPlayAction() {
+        #expect(Bundle.main.url(forResource:"InfiniteArenaPreview",withExtension:"m4v") != nil)
+        let view=SKView(frame:CGRect(x:0,y:0,width:852,height:393)),scene=MainMenuScene(size:CGSize(width:852,height:393))
+        view.presentScene(scene)
+        #expect(scene.childNode(withName:"//infiniteArenaMovie") is SKVideoNode)
+        #expect(scene.childNode(withName:"playPreview") != nil)
+        view.presentScene(nil)
     }
 }

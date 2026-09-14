@@ -561,3 +561,57 @@ extension LivingArena {
         return root
     }
 }
+
+/// Broad-phase lookups retain exact collision/separation math but skip distant objects.
+struct CombatCell: Hashable {
+    let x: Int
+    let y: Int
+}
+struct WallSpatialIndex {
+    private let size: CGFloat = 192
+    private var buckets: [CombatCell: [Int]] = [:]
+    private var walls: [CGRect] = []
+    init(walls: [CGRect] = []) {
+        self.walls = walls
+        for (index,r) in walls.enumerated() {
+            for y in Int(floor(r.minY/size))...Int(floor(r.maxY/size)) {
+                for x in Int(floor(r.minX/size))...Int(floor(r.maxX/size)) {
+                    buckets[CombatCell(x:x,y:y),default:[]].append(index)
+                }
+            }
+        }
+    }
+    func candidates(in rect: CGRect) -> [CGRect] {
+        var indices = Set<Int>()
+        for y in Int(floor(rect.minY/size))...Int(floor(rect.maxY/size)) {
+            for x in Int(floor(rect.minX/size))...Int(floor(rect.maxX/size)) {
+                indices.formUnion(buckets[CombatCell(x:x,y:y)] ?? [])
+            }
+        }
+        return indices.sorted().map { walls[$0] }
+    }
+    func contains(_ point: CGPoint, clearance: CGFloat) -> Bool {
+        candidates(in:CGRect(x:point.x-clearance,y:point.y-clearance,width:clearance*2,height:clearance*2))
+            .contains { $0.insetBy(dx:-clearance,dy:-clearance).contains(point) }
+    }
+    func clearPath(from a: CGPoint, to b: CGPoint, clearance: CGFloat = 22) -> Bool {
+        let box=CGRect(x:min(a.x,b.x)-clearance,y:min(a.y,b.y)-clearance,
+                       width:abs(a.x-b.x)+2*clearance,height:abs(a.y-b.y)+2*clearance)
+        for wall in candidates(in:box) {
+            let rect=wall.insetBy(dx:-clearance,dy:-clearance)
+            var enter: CGFloat = 0, leave: CGFloat = 1
+            var misses = false
+            for (start,delta,low,high) in [(a.x,b.x-a.x,rect.minX,rect.maxX),(a.y,b.y-a.y,rect.minY,rect.maxY)] {
+                if abs(delta)<0.00001 {
+                    if start<low || start>high { misses=true;break }
+                } else {
+                    let first=(low-start)/delta, second=(high-start)/delta
+                    enter=max(enter,min(first,second));leave=min(leave,max(first,second))
+                    if enter>leave {misses=true;break}
+                }
+            }
+            if !misses { return false }
+        }
+        return true
+    }
+}

@@ -30,13 +30,13 @@ class Bullet: SKShapeNode {
         fillColor = color
         strokeColor = color
         lineWidth = 1
-        glowWidth = 7
+        glowWidth = 1.5
 
         let streak = SKShapeNode(rectOf: CGSize(width: 30, height: 3), cornerRadius: 1.5)
         streak.position = CGPoint(x: -15, y: 0)
         streak.fillColor = color.withAlphaComponent(0.7)
         streak.strokeColor = .clear
-        streak.glowWidth = 5
+        streak.glowWidth = 0.8
         streak.zPosition = -1
         streak.name = "bulletStreak"
         addChild(streak)
@@ -44,29 +44,9 @@ class Bullet: SKShapeNode {
         let core = SKShapeNode(circleOfRadius: 2)
         core.fillColor = .white
         core.strokeColor = .white
-        core.glowWidth = 3
+        core.glowWidth = 0.5
         addChild(core)
 
-        let trail = SKEmitterNode()
-        trail.particleTexture = Self.particleTexture
-        trail.particleBirthRate = 90
-        trail.particleLifetime = 0.18
-        trail.particleLifetimeRange = 0.05
-        trail.particlePositionRange = CGVector(dx: 2, dy: 2)
-        trail.particleSpeed = 12
-        trail.emissionAngle = .pi
-        trail.emissionAngleRange = 0.3
-        trail.particleAlpha = 0.8
-        trail.particleAlphaSpeed = -4.2
-        trail.particleScale = 0.75
-        trail.particleScaleSpeed = -2.8
-        trail.particleColor = color
-        trail.particleColorBlendFactor = 1
-        trail.targetNode = nil
-        trail.name = "bulletTrail"
-        trail.zPosition = -2
-        addChild(trail)
-        
         name = "bullet"
         zPosition = 8
         
@@ -86,15 +66,5 @@ class Bullet: SKShapeNode {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func attachTrail(to world: SKNode) {
-        (childNode(withName: "bulletTrail") as? SKEmitterNode)?.targetNode = world
-    }
-
-    private static let particleTexture: SKTexture = {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4))
-        return SKTexture(image: renderer.image { context in
-            UIColor.white.setFill()
-            context.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: 4, height: 4))
-        })
-    }()
+    func attachTrail(to world: SKNode) { /* The bounded streak travels with the projectile. */ }
 }

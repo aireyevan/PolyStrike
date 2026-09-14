@@ -38,25 +38,27 @@ class Player: SKShapeNode {
         let palette = colors(for: style)
         let hull = hullPath(for: style)
         path = hull
-        fillColor = palette.main
-        strokeColor = .white
+        fillColor = palette.dark
+        strokeColor = palette.main
         lineWidth = style == .sovereign ? 3 : 2
-        glowWidth = style == .striker ? 8 : 10
+        glowWidth = 2
+        CombatSurface.add(to:self,path:hull,color:palette.main,variant:100,name:"playerSurface")
 
         let innerHull = SKShapeNode(path: hull)
         innerHull.setScale(style == .sovereign ? 0.58 : 0.55)
         innerHull.fillColor = palette.dark
         innerHull.strokeColor = palette.accent.withAlphaComponent(0.9)
         innerHull.lineWidth = 1.2
-        innerHull.glowWidth = 3
+        innerHull.glowWidth = 0.8
+        innerHull.zPosition = 1
         innerHull.name = "playerInnerHull"
         addChild(innerHull)
 
         let core = SKShapeNode(circleOfRadius: style == .sovereign ? 5.5 : 4.5)
         core.position = CGPoint(x: style == .spectre ? 0 : 3, y: 0)
-        core.fillColor = .white
+        core.fillColor = palette.accent
         core.strokeColor = palette.accent
-        core.glowWidth = style == .eclipse || style == .sovereign ? 8 : 5
+        core.glowWidth = 2
         core.name = "playerCore"
         innerHull.addChild(core)
         core.run(.repeatForever(.sequence([
@@ -64,7 +66,11 @@ class Player: SKShapeNode {
             .group([.scale(to: 0.88, duration: 0.42), .fadeAlpha(to: 1, duration: 0.42)])
         ])))
 
-        addWingDetails(style: style, color: palette.accent)
+        let canopy = SKShapeNode(ellipseOf:CGSize(width:11,height:5))
+        canopy.position = CGPoint(x:1,y:0);canopy.fillColor=palette.accent
+        canopy.strokeColor = .white;canopy.lineWidth=0.7;canopy.glowWidth=1.4;canopy.zPosition=3
+        addChild(canopy)
+        canopy.run(.repeatForever(.sequence([.fadeAlpha(to:0.62,duration:0.8),.fadeAlpha(to:1,duration:0.35)])))
         addEngine(color: palette.engine, premium: [.nova, .eclipse, .sovereign].contains(style))
         addSignatureAnimation(style: style, color: palette.accent)
         name = "player"
@@ -123,7 +129,7 @@ class Player: SKShapeNode {
         engine.position = CGPoint(x: -21, y: 0)
         engine.fillColor = .white
         engine.strokeColor = color
-        engine.glowWidth = premium ? 10 : 7
+        engine.glowWidth = premium ? 3 : 2
         engine.name = "playerEngine"
         addChild(engine)
         engine.run(.repeatForever(.sequence([
@@ -139,7 +145,7 @@ class Player: SKShapeNode {
         ring.fillColor = .clear
         ring.strokeColor = color.withAlphaComponent(style == .eclipse ? 0.65 : 0.38)
         ring.lineWidth = style == .sovereign ? 1.6 : 1
-        ring.glowWidth = style == .sovereign ? 6 : 3
+        ring.glowWidth = 0.8
         ring.zPosition = -2
         addChild(ring)
         ring.run(.repeatForever(.rotate(byAngle: style == .eclipse ? -.pi * 2 : .pi * 2, duration: style == .sovereign ? 1.8 : 3.2)))
@@ -151,7 +157,7 @@ class Player: SKShapeNode {
             orb.position = CGPoint(x: cos(angle) * radius, y: sin(angle) * radius)
             orb.fillColor = .white
             orb.strokeColor = color
-            orb.glowWidth = 6
+            orb.glowWidth = 1.5
             ring.addChild(orb)
         }
         if style == .spectre {

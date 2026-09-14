@@ -170,6 +170,7 @@ class BaseBoss {
         // Armor remains within the collision radius except for decorative tips.
         let armor = SKNode()
         armor.name = "bossArmor"
+        armor.zPosition = 1
         enemy.addChild(armor)
         let steel = SKColor(red: 0.16, green: 0.18, blue: 0.23, alpha: 1)
         let dark = SKColor(red: 0.035, green: 0.04, blue: 0.065, alpha: 1)
@@ -239,6 +240,9 @@ class BaseBoss {
         enemy.addChild(face)
         _ = plate([(-0.37, 0.35), (0, 0.49), (0.37, 0.35), (0.30, -0.35),
                    (0, -0.55), (-0.30, -0.35)], parent: face, fill: dark)
+        if let hull = enemy.path {
+            CombatSurface.add(to:enemy,path:hull,color:type.color,variant:200,name:"bossSurface")
+        }
         let eyes = SKNode()
         eyes.name = "bossEyes"
         face.addChild(eyes)

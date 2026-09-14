@@ -11,6 +11,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var storyExtraction: SKNode?
     private var storyOutcomeHandled = false
     private var storyRetryButton: SKShapeNode?
+    private var storyStageChanging = false
+    private var storyHazardClock: TimeInterval = 0
+    private var storyHUDClock: TimeInterval = 0
+    private let storyWaypoint = SKLabelNode(fontNamed:"AvenirNext-DemiBold")
 
     convenience init(size: CGSize, storyModeManager: StoryModeManager) {
         self.init(size: size)
@@ -38,6 +42,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var navDistances: [Int: Int] = [:]
     private var blockedCells = Set<Int>()
     private var wallRects: [CGRect] = []
+    private var wallSpatialIndex = WallSpatialIndex()
+    private var hudRefreshClock: TimeInterval = 0
+    private var explosionWindow: TimeInterval = -1
+    private var explosionsInWindow = 0
     private let cellSize: CGFloat = 48
     private var navColumns = 0
     private var navRows = 0
@@ -230,7 +238,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         joystickVisibilityTimer = 0
         joysticksHidden = false
 
-        currentTier = storyModeManager.map { GameTier.tier(number: max(1, $0.mission.sector * 2)) } ?? GameTier.tier(for: score)
+        currentTier = storyModeManager.map { GameTier.tier(number: max(1, $0.mission.sector + 1)) } ?? GameTier.tier(for: score)
 
         if storyModeManager == nil { prepareWave(for: currentTier.number) }
         else { regularEnemiesRemaining = 0; bossesRemaining = 0 }
@@ -972,6 +980,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
         gameTime = currentTime
         frameDelta = deltaTime
+        if let manager=storyModeManager,manager.phase != .active {
+            updateStoryMode(deltaTime:0)
+            return
+        }
         elapsed += deltaTime
         updateAbilities(deltaTime: deltaTime)
         updatePowerUpEffects()
@@ -982,8 +994,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             navigationClock = 0
         }
         updatePickups(deltaTime: deltaTime)
-        coinLabel.text = "\(runCoins)"
-        updateTierProgressLabel()
+        hudRefreshClock += deltaTime
+        if hudRefreshClock >= 0.1 {
+            let coins = "\(runCoins)"
+            if coinLabel.text != coins { coinLabel.text = coins }
+            updateTierProgressLabel()
+            hudRefreshClock = 0
+        }
 
         updateMovement(
             deltaTime: deltaTime
@@ -1326,7 +1343,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
             resolveEnemyBarrierCollision(enemy)
             let occupiedCell = navIndex(enemy.position)
-            if !activeArena.containsShip(at: enemy.position) || navDistances[occupiedCell] == nil {
+            if !worldBounds.insetBy(dx:22,dy:22).contains(enemy.position) || wallSpatialIndex.contains(enemy.position,clearance:22) || navDistances[occupiedCell] == nil {
                 enemy.position = nearestReachableNavigationPoint(to: enemy.position)
                 enemy.userData?.removeObject(forKey: "steeringX")
                 enemy.userData?.removeObject(forKey: "steeringY")
@@ -1340,15 +1357,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         _ enemy: Enemy
     ) {
 
-        for child in barrierNode.children {
-
-            guard let barrier =
-                child as? Barrier else {
-                continue
-            }
-
-            let rect = barrier.barrierRect
-
+        let nearby = CGRect(x:enemy.position.x-24,y:enemy.position.y-24,width:48,height:48)
+        for rect in wallSpatialIndex.candidates(in:nearby) {
             let closestX = max(
                 rect.minX,
                 min(
@@ -1694,7 +1704,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
 
-    private func createEnemy() {
+    @discardableResult private func createEnemy(forcedVariant:Int? = nil) -> Enemy {
 
         let enemy = Enemy()
 
@@ -1725,7 +1735,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let activeHives = worldNode.children.reduce(into: 0) {
             if $1 is Enemy, $1.userData?["arrowHive"] as? Bool == true { $0 += 1 }
         }
-        if currentTier.number >= 5,
+        if let forcedVariant {
+            variant = forcedVariant
+        } else if currentTier.number >= 5,
            activeHives < 4,
            Int.random(in: 0..<100) < 6 {
             // Hives remain uncommon, but a later wave can build to a maximum of
@@ -1801,6 +1813,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let archetype = currentTier.number < 3 && (variant == 2 || variant == 3) ? 0 : variant
         enemy.configureVisual(archetype: archetype)
         createEnemySpawnEffect(at: enemy.position)
+        return enemy
     }
 
     private func randomSpawnPosition() -> CGPoint {
@@ -1939,6 +1952,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     func didBegin(
         _ contact: SKPhysicsContact
     ) {
+        if let manager=storyModeManager,manager.phase != .active {return}
+
 
         guard !gameOver, !pausedRun else { return }
         let categories = contact.bodyA.categoryBitMask | contact.bodyB.categoryBitMask
@@ -2269,6 +2284,12 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         at position: CGPoint
     ) {
 
+        let screenCenter = cameraNode?.position ?? player.position
+        guard abs(position.x-screenCenter.x) < size.width/2+100,
+              abs(position.y-screenCenter.y) < size.height/2+100 else { return }
+        if elapsed-explosionWindow >= 0.1 { explosionWindow=elapsed;explosionsInWindow=0 }
+        guard explosionsInWindow < 4 else { return }
+        explosionsInWindow += 1
         let outerRing =
             SKShapeNode(
                 circleOfRadius: 9
@@ -2333,7 +2354,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             ])
         )
 
-        for _ in 0..<8 {
+        for _ in 0..<4 {
 
             createExplosionParticle(
                 at: position
@@ -4087,18 +4108,17 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let cameraLocation = location
 
         if let retry = storyRetryButton, retry.contains(cameraLocation), let manager = storyModeManager {
-            manager.reset()
+            if manager.phase == .complete {
+                if manager.isReplay || !manager.advance() {returnToStoryOperations();return}
+            } else {manager.retryCurrentStage()}
             let scene = GameScene(size: size, storyModeManager: manager)
             scene.scaleMode = scaleMode
             view?.presentScene(scene, transition: .fade(withDuration: 0.25))
             return
         }
 
-        if mainMenuButton.contains(
-            cameraLocation
-        ) {
-
-            returnToMainMenu()
+        if mainMenuButton.contains(cameraLocation) {
+            if storyModeManager != nil {returnToStoryOperations()} else {returnToMainMenu()}
         }
     }
 
@@ -4212,6 +4232,7 @@ private extension GameScene {
         if y + 1 < navRows { result.append(index + navColumns) }
         return result.filter { !blockedCells.contains($0) }    }
     func buildNavigation() {
+        wallSpatialIndex = WallSpatialIndex(walls:wallRects)
         navColumns = Int(ceil(worldBounds.width / cellSize))
         navRows = Int(ceil(worldBounds.height / cellSize))
         blockedCells.removeAll()
@@ -4244,13 +4265,7 @@ private extension GameScene {
         }
     }
     func clearPath(from a: CGPoint, to b: CGPoint) -> Bool {
-        let steps = max(1, Int(ceil(hypot(b.x - a.x, b.y - a.y) / 16)))
-        for step in 0...steps {
-            let t = CGFloat(step) / CGFloat(steps)
-            let p = CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
-            if wallRects.contains(where: { $0.insetBy(dx: -22, dy: -22).contains(p) }) { return false }
-        }
-        return true
+        wallSpatialIndex.clearPath(from:a,to:b)
     }
     func navigationTarget(from point: CGPoint) -> CGPoint {
         if clearPath(from: point, to: player.position) { return player.position }
@@ -5335,37 +5350,30 @@ extension GameScene {
         }
     }
     func activateDash() {
+        if let manager=storyModeManager,manager.phase != .active {return}
         guard !gameOver, !pausedRun, progression.level(.dash) > 0, elapsed >= dashReadyAt else { return }
         dashReadyAt = elapsed + progression.dashCooldown
         dashUntil = elapsed + 0.35
         let input = moveJoystick.direction
         let direction = hypot(input.dx, input.dy) > 0.1 ? normalize(input) : CGVector(dx: cos(player.zRotation), dy: sin(player.zRotation))
+        let dashStart = player.position
         for _ in 0..<9 {
             let candidate = CGPoint(x: player.position.x + direction.dx * 18, y: player.position.y + direction.dy * 18)
             guard worldBounds.insetBy(dx: 20, dy: 20).contains(candidate), !wallRects.contains(where: { $0.insetBy(dx: -20, dy: -20).contains(candidate) }) else { break }
-            let trail = SKShapeNode(circleOfRadius: 10)
-            trail.position = player.position
-            trail.strokeColor = .cyan
-            trail.fillColor = .clear
-            trail.zPosition = 10
-            worldNode.addChild(trail)
-            trail.run(.sequence([.fadeOut(withDuration: 0.25), .removeFromParent()]))
             player.position = candidate
+        }
+        if let hull = player.path {
+            worldNode.addChild(CombatEffects.dash(from:dashStart,to:player.position,hull:hull,angle:player.zRotation,color:player.projectileColor))
         }
     }
     func activateBomb() {
+        if let manager=storyModeManager,manager.phase != .active {return}
         guard !gameOver, !pausedRun, progression.level(.bomb) > 0, elapsed >= bombReadyAt else { return }
         bombReadyAt = elapsed + progression.bombCooldown
         let radius: CGFloat = 180 + CGFloat(progression.level(.bomb)) * 5
-        let ring = SKShapeNode(circleOfRadius: radius)
-        ring.position = player.position
-        ring.strokeColor = .orange
-        ring.lineWidth = 4
-        ring.fillColor = SKColor.orange.withAlphaComponent(0.08)
-        ring.zPosition = effectZ
-        ring.setScale(0.1)
-        worldNode.addChild(ring)
-        ring.run(.sequence([.group([.scale(to: 1, duration: 0.3), .fadeOut(withDuration: 0.3)]), .removeFromParent()]))
+        let wave = CombatEffects.shockwave(radius:radius,color:player.projectileColor)
+        wave.position = player.position
+        worldNode.addChild(wave)
         for node in worldNode.children where hypot(node.position.x - player.position.x, node.position.y - player.position.y) <= radius {
             if node.physicsBody?.categoryBitMask == 16 { node.removeFromParent() }
             if let enemy = node as? Enemy {
@@ -5427,144 +5435,207 @@ extension GameScene {
 
 private extension GameScene {
     func configureStoryMission() {
-        guard let manager = storyModeManager else { return }
-        tierPanel.isHidden = true
-        arenaStatus.text = "SECTOR \(manager.mission.sector)  /  MISSION \(manager.mission.number)"
-        missionHUD.position = CGPoint(x: 0, y: size.height / 2 - currentSafeAreaInsets().top - 38)
-        missionHUD.zPosition = hudZ + 5
-        cameraNode.addChild(missionHUD)
-        missionHUD.render(manager.status)
-        showMissionBanner(manager.mission, completion: false)
-        run(.sequence([.wait(forDuration: 2.6), .run { [weak self] in
-            guard let self, let manager = self.storyModeManager else { return }
-            manager.begin()
-            self.installStoryObjectives(for: manager.mission)
-        }]))
-    }
-
-    func showMissionBanner(_ mission: Mission, completion: Bool) {
-        let overlay = SKShapeNode(rectOf: size)
-        overlay.fillColor = SKColor.black.withAlphaComponent(0.78)
-        overlay.strokeColor = .clear
-        overlay.zPosition = hudZ + 30
-        let missionFrame = armorPanel(size:CGSize(width:min(520,size.width-100),height:180),color:completion ? NeonColors.green : .cyan)
-        missionFrame.zPosition = 0; overlay.addChild(missionFrame)
-        let sector = makeLabel(text: completion ? "SECTOR \(mission.sector)" : String(format: "SECTOR %02d   /   MISSION %02d", mission.sector, mission.number), fontSize: 10, fontName: "AvenirNext-DemiBold", color: NeonColors.mutedText)
-        sector.position.y = 42; overlay.addChild(sector)
-        let title = makeLabel(text: completion ? "MISSION COMPLETE" : mission.type.title, fontSize: 30, fontName: "AvenirNext-Heavy", color: completion ? NeonColors.green : .cyan)
-        title.position.y = 2; overlay.addChild(title)
-        let detail = makeLabel(text: completion ? mission.name : mission.description, fontSize: 10, fontName: "AvenirNext-DemiBold", color: .white)
-        detail.position.y = -34; overlay.addChild(detail)
-        overlay.children.filter { $0 !== missionFrame }.forEach { $0.zPosition = 1 }
-        cameraNode.addChild(overlay)
-        if !completion { overlay.run(.sequence([.wait(forDuration: 2.25), .fadeOut(withDuration: 0.3), .removeFromParent()])) }
-    }
-
-    func installStoryObjectives(for mission: Mission) {
-        storyObjectiveNodes.removeAll(); storyDefenseObjective = nil; storyExtraction = nil
-        installStoryArenaLayout(mission.arena)
-        switch mission.type {
-        case .defense:
-            let core = storyObjectiveNode(color: .cyan, radius: 30, name: "storyReactor")
-            core.position = activeArena.nearestFloor(to: activeArena.center)
-            worldNode.addChild(core); storyDefenseObjective = core; storyObjectiveNodes = [core]
-            storyObjectiveNavDistances = navigationField(to: core.position)
-        case .capture:
-            let offsets = [CGPoint(x:-180,y:-90), CGPoint(x:180,y:-90), CGPoint(x:0,y:145)]
-            for index in 0..<mission.objectiveCount {
-                let zone = storyObjectiveNode(color: index == 0 ? .cyan : NeonColors.purple, radius: 38, name: "capture\(index)")
-                zone.position = activeArena.nearestFloor(to: CGPoint(x:activeArena.center.x+offsets[index].x,y:activeArena.center.y+offsets[index].y))
-                worldNode.addChild(zone); storyObjectiveNodes.append(zone)
-            }
-        case .assault:
-            for index in 0..<mission.objectiveCount { spawnStoryTarget(index:index,count:mission.objectiveCount) }
-        case .eliteHunt:
-            spawnStoryBoss(final:false)
-        case .boss:
-            spawnStoryBoss(final:true)
-        default: break
-        }
-    }
-
-    func installStoryArenaLayout(_ layout: StoryArenaLayout) {
-        let phases = [0,3,4,20,2,9,18,21,13,15,6,17,22,8,14,12,7,19,16,10,23]
-        let missionID = storyModeManager?.mission.id
-        let index = StoryCampaign.missions.firstIndex { $0.id == missionID } ?? 0
-        activeArena = LivingArena(phase:phases[index],center:activeArena.center,variant:index/5%4)
-        worldBounds = activeArena.bounds
-        installArena(activeArena)
-        if !activeArena.containsShip(at:player.position) { player.position = activeArena.nearestFloor(to:player.position) }
-        buildNavigation()
-    }
-
-    func storyObjectiveNode(color: SKColor, radius: CGFloat, name: String) -> SKNode {
-        let node = SKNode(); node.name = name
-        let ring = SKShapeNode(circleOfRadius: radius); ring.name = "ring"; ring.fillColor=color.withAlphaComponent(0.07); ring.strokeColor=color; ring.lineWidth=2; ring.glowWidth=4; node.addChild(ring)
-        let core = SKShapeNode(rectOf:CGSize(width:radius*0.55,height:radius*0.55)); core.zRotation = .pi/4; core.fillColor=color.withAlphaComponent(0.35);core.strokeColor = .white;core.glowWidth=5;node.addChild(core)
-        ring.run(.repeatForever(.sequence([.scale(to:1.12,duration:0.7),.scale(to:0.94,duration:0.7)])))
-        return node
-    }
-
-    func spawnStoryTarget(index:Int,count:Int) {
-        let enemy=Enemy(); enemy.userData=["storyObjective":true]; enemy.health=enemyHealth*(5+CGFloat(storyModeManager?.mission.sector ?? 1));enemy.maxHealth=enemy.health;enemy.moveSpeed=0;enemy.damage=0;enemy.scoreValue=currentTier.killScore*3
-        let angle = CGFloat(index) * .pi * 2 / CGFloat(count); enemy.position=activeArena.nearestFloor(to:CGPoint(x:activeArena.center.x+cos(angle)*210,y:activeArena.center.y+sin(angle)*145))
-        enemy.strokeColor=NeonColors.purple;enemy.fillColor=NeonColors.purple.withAlphaComponent(0.25);enemy.configureVisual(archetype:2);worldNode.addChild(enemy);storyObjectiveNodes.append(enemy);createEnemySpawnEffect(at:enemy.position)
-    }
-
-    func spawnStoryBoss(final:Bool) {
         guard let manager=storyModeManager else{return}
-        missionHUD.isHidden = true
-        let scale:CGFloat = final ? 95 + CGFloat(manager.mission.sector) * 12 : 52 + CGFloat(manager.mission.sector) * 8
-        bossManager.startStory(mission: manager.mission, baseHealth: enemyHealth * scale, world: makeBossWorld())
+        tierPanel.isHidden=true
+        missionHUD.position=CGPoint(x:0,y:size.height/2-currentSafeAreaInsets().top-38)
+        missionHUD.zPosition=hudZ+5;cameraNode.addChild(missionHUD)
+        storyWaypoint.fontSize=9;storyWaypoint.fontColor = .cyan;storyWaypoint.zPosition=hudZ+2
+        storyWaypoint.position=CGPoint(x:0,y:-size.height/2+currentSafeAreaInsets().bottom+28);cameraNode.addChild(storyWaypoint)
+        installStoryStage()
+        showMissionBanner(manager.mission,completion:false)
+        run(.sequence([.wait(forDuration:3.2),.run{[weak self] in self?.storyModeManager?.begin()}]),withKey:"storyBriefing")
+    }
+
+    func showMissionBanner(_ mission:Mission,completion:Bool) {
+        cameraNode.childNode(withName:"storyBanner")?.removeFromParent()
+        let overlay=SKShapeNode(rectOf:size);overlay.name="storyBanner";overlay.fillColor=SKColor.black.withAlphaComponent(0.82);overlay.strokeColor = .clear;overlay.zPosition=hudZ+30
+        let width=min(540,size.width-90)
+        let frame=armorPanel(size:CGSize(width:width,height:204),color:.cyan);overlay.addChild(frame)
+        let stage=storyModeManager?.stage
+        menuText("\(StoryCampaign.sectorNames[mission.sector-1]) / OP \(mission.number)",on:frame,at:CGPoint(x:0,y:70),size:9,color:NeonColors.orange,align:.center,width:width-32)
+        menuText(mission.name,on:frame,at:CGPoint(x:0,y:38),size:24,align:.center,width:width-32)
+        menuText("STAGE \((storyModeManager?.stageIndex ?? 0)+1) / \(mission.stages.count) • \(stage?.title ?? "DEPLOY")",on:frame,at:CGPoint(x:0,y:9),size:11,color:.cyan,align:.center,width:width-32)
+        menuText(stage?.instruction ?? mission.description,on:frame,at:CGPoint(x:0,y:-19),size:9,align:.center,width:width-32)
+        let narrative=menuText(mission.number==1 && storyModeManager?.stageIndex==0 ? StoryCampaign.sectorStories[mission.sector-1] : mission.description,on:frame,at:CGPoint(x:0,y:-43),size:8,color:NeonColors.mutedText,align:.center)
+        narrative.numberOfLines=2;narrative.preferredMaxLayoutWidth=width-32;narrative.verticalAlignmentMode = .top
+        menuText("CHECKPOINTS BETWEEN STAGES • FIRST CLEAR +\(mission.reward) FLUX",on:frame,at:CGPoint(x:0,y:-77),size:8,color:NeonColors.green,align:.center,width:width-32)
+        cameraNode.addChild(overlay);overlay.run(.sequence([.wait(forDuration:2.8),.fadeOut(withDuration:0.35),.removeFromParent()]))
+    }
+
+    func installStoryStage() {
+        guard let manager=storyModeManager else{return}
+        bossManager.cleanup()
+        for pickup in worldNode.children.compactMap({$0 as? FluxPickup}) {collectPickup(pickup)}
+        powerUpsDroppedThisTier=0
+        for node in worldNode.children where node is Enemy || node is Bullet || node is FluxPickup || node is PowerUpPickup || node.physicsBody?.categoryBitMask == 16 || node.name?.hasPrefix("story") == true {node.removeAllActions();node.removeFromParent()}
+        storyObjectiveNodes.removeAll();storyDefenseObjective=nil;storyExtraction=nil;storyObjectiveNavDistances.removeAll()
+        storyHazardClock=0;storyHUDClock=0;storyStageChanging=false
+        activeArena=LivingArena(phase:manager.stage.arenaPhase,center:activeArena.center,variant:manager.stage.arenaVariant)
+        worldBounds=activeArena.bounds;installArena(activeArena)
+        player.position=activeArena.nearestFloor(to:CGPoint(x:activeArena.center.x-260,y:activeArena.center.y))
+        buildNavigation();cameraNode.position=player.position
+        enemyHealth=30+manager.pressure*90+CGFloat(manager.stageIndex)*4
+        enemySpeed=95+manager.pressure*70
+        missionHUD.isHidden=false;missionHUD.render(manager.status)
+        let positions=storyObjectivePositions(count:manager.stage.objectiveCount)
+        switch manager.stage.type {
+        case .defense:
+            let core=StoryObjectiveNode(kind:.reactor);core.position=activeArena.nearestFloor(to:activeArena.center)
+            worldNode.addChild(core);storyDefenseObjective=core;storyObjectiveNodes=[core];storyObjectiveNavDistances=navigationField(to:core.position)
+        case .capture:
+            for (i,position) in positions.enumerated() {let relay=StoryObjectiveNode(kind:.relay,index:i);relay.position=position;worldNode.addChild(relay);storyObjectiveNodes.append(relay)}
+        case .assault:
+            for (i,position) in positions.enumerated() {
+                let target=Enemy();target.userData=["storyObjective":true];target.name="storyPowerTarget";target.health=110+manager.pressure*210;target.maxHealth=target.health;target.moveSpeed=0;target.damage=0;target.scoreValue=200+manager.mission.sector*100
+                target.path=CGPath(rect:CGRect(x:-28,y:-28,width:56,height:56),transform:nil);target.fillColor = .clear;target.strokeColor = .clear;target.glowWidth=0
+                target.physicsBody=SKPhysicsBody(rectangleOf:CGSize(width:56,height:56));target.physicsBody?.affectedByGravity=false;target.physicsBody?.categoryBitMask=enemyCategory;target.physicsBody?.collisionBitMask=0;target.physicsBody?.contactTestBitMask=bulletCategory
+                let machine=StoryObjectiveNode(kind:.installation,index:i);machine.name="installationVisual";target.addChild(machine);target.position=position;worldNode.addChild(target);storyObjectiveNodes.append(target)
+            }
+        case .eliteHunt,.boss:
+            missionHUD.isHidden=true
+            let health=CGFloat(650+manager.mission.difficulty*45)*(manager.stage.type == .eliteHunt ? 0.65:1)
+            bossManager.startStory(mission:manager.mission,stage:manager.stage,baseHealth:health,world:makeBossWorld())
+        default:break
+        }
+        updateStoryWaypoint()
+    }
+
+    func storyObjectivePositions(count:Int)->[CGPoint] {
+        var result:[CGPoint]=[]
+        for index in 0..<count {
+            let angle=CGFloat(index)*2 * .pi/CGFloat(max(1,count)) + .pi/4
+            let desired=CGPoint(x:activeArena.center.x+cos(angle)*430,y:activeArena.center.y+sin(angle)*290)
+            let choices=activeArena.floorCenters.filter{p in result.allSatisfy{hypot($0.x-p.x,$0.y-p.y)>230}}
+            let point=choices.min{hypot($0.x-desired.x,$0.y-desired.y)<hypot($1.x-desired.x,$1.y-desired.y)} ?? activeArena.nearestFloor(to:desired)
+            result.append(point)
+        }
+        return result
+    }
+
+    func deployStoryFormation(alive:Int) {
+        guard let manager=storyModeManager,manager.shouldSpawn(enemiesAlive:alive) else{return}
+        let stageIndex=manager.stageIndex
+        let budget=manager.stage.type == .elimination ? manager.stage.enemyCount-manager.spawned:manager.formationSize
+        let count=max(0,min(budget,min(manager.formationSize,manager.enemyLimit-alive-manager.pendingSpawns)))
+        let group=manager.spawned/max(1,manager.formationSize),pattern=manager.stage.formation
+        let positions=StoryFormation.positions(in:activeArena,pattern:pattern,group:group,count:count,player:player.position)
+        for position in positions {
+            let serial=manager.spawned
+            let decks=[[0,0,1],[0,1,3,0],[1,2,3,4],[2,3,5,1],[1,3,5,4,2]]
+            var archetype=decks[manager.mission.sector-1][(serial+pattern)%decks[manager.mission.sector-1].count]
+            if manager.mission.sector>=4 && serial>0 && serial%29==0 {archetype=6}
+            manager.registeredSpawn()
+            let warning=SKShapeNode(circleOfRadius:23);warning.name="storySpawnWarning";warning.position=position;warning.strokeColor=NeonColors.orange;warning.fillColor=NeonColors.orange.withAlphaComponent(0.08);warning.lineWidth=1.5;warning.zPosition=8;worldNode.addChild(warning)
+            warning.run(.sequence([.group([.wait(forDuration:1.1),.rotate(byAngle:.pi,duration:1.1),.scale(to:0.6,duration:1.1)]),.run{[weak self] in
+                guard let self,let current=self.storyModeManager,current.stageIndex==stageIndex,current.phase == .active else{return}
+                let enemy=self.createEnemy(forcedVariant:archetype);enemy.position=position
+                enemy.damage *= 0.85+current.pressure*0.35
+                current.spawnArrived()
+            },.removeFromParent()]))
+        }
     }
 
     func updateStoryMode(deltaTime:TimeInterval) {
         guard let manager=storyModeManager else{return}
-        if manager.phase == .active {
-            if manager.mission.type == .defense, let core=storyDefenseObjective {
-                let attackers=worldNode.children.compactMap{$0 as? Enemy}.filter{hypot($0.position.x-core.position.x,$0.position.y-core.position.y)<55}.count
-                if attackers>0 { manager.damageObjective(CGFloat(attackers)*CGFloat(deltaTime)*5.5) }
-            }
-            if manager.mission.type == .capture {
-                for (index,zone) in storyObjectiveNodes.enumerated() where hypot(player.position.x-zone.position.x,player.position.y-zone.position.y)<43 {
-                    manager.holdCaptureZone(index,delta:deltaTime)
-                    (zone.childNode(withName:"ring") as? SKShapeNode)?.strokeColor = manager.captureProgress[index] >= 1 ? NeonColors.green : .white
-                }
-            }
-            if manager.mission.type == .escape, manager.extractionAvailable {
-                if storyExtraction == nil {
-                    let portal=storyObjectiveNode(color:NeonColors.green,radius:42,name:"storyExtraction");portal.position=activeArena.nearestFloor(to:CGPoint(x:activeArena.bounds.maxX-120,y:activeArena.center.y));worldNode.addChild(portal);storyExtraction=portal
-                }
-                if let portal=storyExtraction, hypot(player.position.x-portal.position.x,player.position.y-portal.position.y)<46 { manager.reachedExtraction() }
-            }
-            let enemies=worldNode.children.compactMap{$0 as? Enemy}.filter{$0.userData?["storyObjective"] as? Bool != true}
-            if let elite=bossManager.enemy { manager.updateEliteHealth(elite.health / max(1,elite.maxHealth)) }
-            manager.tick(deltaTime,enemiesAlive:enemies.count)
-            if manager.shouldSpawn(enemiesAlive:enemies.count) {
-                createEnemy()
-                if let spawned=worldNode.children.compactMap({$0 as? Enemy}).last {
-                    let sector=CGFloat(manager.mission.sector)
-                    spawned.health *= 1 + sector * 0.12; spawned.maxHealth = spawned.health
-                    spawned.damage *= 1 + sector * 0.14; spawned.moveSpeed *= 1 + sector * 0.045
-                }
-                manager.registeredSpawn()
-            }
-            missionHUD.render(manager.status)
+        if manager.phase == .checkpoint && !storyStageChanging {
+            storyStageChanging=true;worldNode.isPaused=true
+            let label=makeLabel(text:"CHECKPOINT SECURED • REPAIR +25% • NEXT STAGE IN 3",fontSize:11,fontName:"AvenirNext-Heavy",color:NeonColors.green);label.name="storyCheckpointBanner";label.position.y=0;label.zPosition=hudZ+20;cameraNode.addChild(label)
+            run(.sequence([.wait(forDuration:2.6),.run{[weak self,weak label] in
+                guard let self,let manager=self.storyModeManager,manager.advanceStage() else{return}
+                label?.removeFromParent();self.worldNode.isPaused=false;self.player.health=min(self.player.maxHealth,self.player.health+self.player.maxHealth*0.25);self.updateHUD()
+                self.installStoryStage();self.showMissionBanner(manager.mission,completion:false)
+                self.run(.sequence([.wait(forDuration:3.2),.run{[weak self] in self?.storyModeManager?.begin()}]),withKey:"storyBriefing")
+            }]),withKey:"storyCheckpoint")
+            return
         }
-        if manager.phase == .failed && !storyOutcomeHandled { showStoryFailure(reason:"OBJECTIVE DESTROYED") }
-        if manager.phase == .complete && !storyOutcomeHandled { finishStoryMission() }
+        if manager.phase == .active {
+            let enemies=worldNode.children.compactMap{$0 as? Enemy}.filter{$0.userData?["storyObjective"] as? Bool != true}
+            if manager.stage.type == .defense,let core=storyDefenseObjective as? StoryObjectiveNode {
+                let attackers=enemies.filter{hypot($0.position.x-core.position.x,$0.position.y-core.position.y)<65}.count
+                if attackers>0 {manager.damageObjective(CGFloat(attackers)*CGFloat(deltaTime)*3.2)}
+                else if hypot(player.position.x-core.position.x,player.position.y-core.position.y)<95 {manager.repairObjective(deltaTime)}
+                core.render(progress:manager.objectiveHealth/100,state:attackers>0 ? "UNDER ATTACK • \(Int(manager.objectiveHealth))%":"INTEGRITY \(Int(manager.objectiveHealth))%",contested:attackers>0)
+            }
+            if manager.stage.type == .capture {
+                for (index,node) in storyObjectiveNodes.enumerated() {
+                    guard let relay=node as? StoryObjectiveNode else{continue}
+                    let contested=enemies.contains{hypot($0.position.x-relay.position.x,$0.position.y-relay.position.y)<90}
+                    let close=hypot(player.position.x-relay.position.x,player.position.y-relay.position.y)<68
+                    if close {manager.holdCaptureZone(index,delta:deltaTime,contested:contested)}
+                    let progress=manager.captureProgress[index]
+                    relay.render(progress:progress,state:progress>=1 ? "LINK SECURED":contested ? "CONTESTED":close ? "UPLOADING \(Int(progress*100))%":"HOLD TO LINK",contested:contested && progress<1)
+                }
+            }
+            for target in storyObjectiveNodes.compactMap({$0 as? Enemy}) where target.parent != nil {
+                (target.childNode(withName:"installationVisual") as? StoryObjectiveNode)?.render(progress:target.health/max(1,target.maxHealth),state:"ARMOR \(Int(max(0,target.health)/max(1,target.maxHealth)*100))%")
+            }
+            if manager.stage.type == .escape && manager.extractionAvailable {
+                if storyExtraction == nil {let gate=StoryObjectiveNode(kind:.gate);gate.position=activeArena.nearestFloor(to:CGPoint(x:activeArena.bounds.maxX-220,y:activeArena.center.y));worldNode.addChild(gate);storyExtraction=gate}
+                if let gate=storyExtraction,hypot(player.position.x-gate.position.x,player.position.y-gate.position.y)<66 {manager.reachedExtraction()}
+            }
+            if let elite=bossManager.enemy {manager.updateEliteHealth(elite.health/max(1,elite.maxHealth))}
+            manager.tick(deltaTime,enemiesAlive:enemies.count)
+            deployStoryFormation(alive:enemies.count)
+            if manager.stage.hazard {
+                storyHazardClock += deltaTime
+                if storyHazardClock>=max(7,14-Double(manager.mission.sector)) {storyHazardClock=0;createStoryArtillery()}
+            }
+            storyHUDClock += deltaTime
+            if storyHUDClock>=0.1 {storyHUDClock=0;missionHUD.render(manager.status);updateStoryWaypoint()}
+        }
+        if manager.phase == .failed && !storyOutcomeHandled {showStoryFailure(reason:"REACTOR DESTROYED")}
+        if manager.phase == .complete && !storyOutcomeHandled {finishStoryMission()}
+    }
+
+    func createStoryArtillery() {
+        guard let manager=storyModeManager,manager.phase == .active else{return}
+        let stageIndex=manager.stageIndex,point=player.position
+        let warning=SKShapeNode(circleOfRadius:65);warning.name="storyArtillery";warning.position=point;warning.lineWidth=2;warning.strokeColor=NeonColors.orange;warning.fillColor=NeonColors.orange.withAlphaComponent(0.13);warning.zPosition=3
+        let cross=SKShapeNode(rectOf:CGSize(width:100,height:2));cross.fillColor=NeonColors.orange;cross.strokeColor = .clear;warning.addChild(cross)
+        let vertical=SKShapeNode(rectOf:CGSize(width:2,height:100));vertical.fillColor=NeonColors.orange;vertical.strokeColor = .clear;warning.addChild(vertical)
+        worldNode.addChild(warning)
+        warning.run(.sequence([.wait(forDuration:1.35),.run{[weak self,weak warning] in
+            guard let self,let manager=self.storyModeManager,manager.phase == .active,manager.stageIndex==stageIndex else{return}
+            warning?.fillColor=NeonColors.orange.withAlphaComponent(0.5)
+            if hypot(self.player.position.x-point.x,self.player.position.y-point.y)<65 && self.elapsed>=self.invincibleUntil && self.elapsed>=self.dashUntil {
+                self.player.health -= CGFloat(9+manager.mission.sector)*self.progression.damageMultiplier;self.updateHUD();self.createPlayerDamageEffect();if self.player.health<=0 {self.endGame()}
+            }
+        },.fadeOut(withDuration:0.25),.removeFromParent()]))
+    }
+
+    func updateStoryWaypoint() {
+        guard let manager=storyModeManager else{return}
+        var targets=storyObjectiveNodes.filter{$0.parent != nil}
+        if manager.stage.type == .capture {targets=storyObjectiveNodes.enumerated().filter{manager.captureProgress[$0.offset]<1}.map(\.element)}
+        if let gate=storyExtraction {targets=[gate]}
+        if let boss=bossManager.enemy {targets=[boss]}
+        if let target=targets.min(by:{hypot($0.position.x-player.position.x,$0.position.y-player.position.y)<hypot($1.position.x-player.position.x,$1.position.y-player.position.y)}) {
+            let dx=target.position.x-player.position.x,dy=target.position.y-player.position.y
+            let direction=abs(dx)>abs(dy) ? (dx>0 ? "→":"←") : (dy>0 ? "↑":"↓")
+            storyWaypoint.text="\(direction)  \(manager.stage.type == .assault ? "POWER NODE" : manager.stage.type == .capture ? "UNLINKED RELAY":"OBJECTIVE")  /  \(Int(hypot(dx,dy))) M"
+        } else {storyWaypoint.text="STAGE \(manager.stageIndex+1) / \(manager.mission.stages.count)  •  \(manager.stage.title)"}
     }
 
     func finishStoryMission() {
-        guard let manager=storyModeManager else{return};storyOutcomeHandled=true
-        progression.recordRun(duration:elapsed,enemiesKilled:runEnemiesKilled,tiersCompleted:1,highestTier:manager.mission.sector,score:score)
-        showMissionBanner(manager.mission,completion:true)
-        run(.sequence([.wait(forDuration:2.4),.run{[weak self] in
-            guard let self,let manager=self.storyModeManager else{return}
-            if manager.isReplay { let select=StoryMissionSelectScene(size:self.size);select.scaleMode=self.scaleMode;self.view?.presentScene(select,transition:.fade(withDuration:0.4)) }
-            else if manager.advance(){let next=GameScene(size:self.size,storyModeManager:manager);next.scaleMode=self.scaleMode;self.view?.presentScene(next,transition:.fade(withDuration:0.4))}
-            else{UserDefaults.standard.set(true,forKey:"polystrikeStoryComplete");self.returnToMainMenu()}
-        }]))
+        guard let manager=storyModeManager else{return};storyOutcomeHandled=true;gameOver=true;worldNode.isPaused=true
+        for pickup in worldNode.children.compactMap({$0 as? FluxPickup}) {collectPickup(pickup)}
+        let result=manager.recordVictory(healthRatio:player.health/max(1,player.maxHealth));progression.addPoints(result.reward)
+        progression.recordRun(duration:elapsed,enemiesKilled:runEnemiesKilled,tiersCompleted:manager.mission.stages.count,highestTier:manager.mission.sector,score:score)
+        let shade=SKShapeNode(rectOf:size);shade.fillColor=SKColor.black.withAlphaComponent(0.87);shade.strokeColor = .clear;shade.zPosition=900;cameraNode.addChild(shade)
+        let frame=armorPanel(size:CGSize(width:min(500,size.width-90),height:248),color:NeonColors.green);shade.addChild(frame)
+        menuText(manager.isLastMission ? "FLEET LIBERATED":"OPERATION COMPLETE",on:frame,at:CGPoint(x:0,y:85),size:23,color:NeonColors.green,align:.center,width:420)
+        menuText(manager.mission.name,on:frame,at:CGPoint(x:0,y:55),size:13,align:.center)
+        menuText(String(repeating:"★",count:result.stars)+String(repeating:"☆",count:3-result.stars),on:frame,at:CGPoint(x:0,y:23),size:26,color:NeonColors.yellow,align:.center)
+        menuText("\(Int(manager.totalElapsed)) SEC • \(result.reward>0 ? "+\(result.reward) FIRST-CLEAR FLUX":"RECORD SAVED")",on:frame,at:CGPoint(x:0,y:-7),size:9,align:.center)
+        menuText("MEDALS: CLEAR • BEAT PAR • FINISH ABOVE 50% HULL",on:frame,at:CGPoint(x:0,y:-28),size:8,color:NeonColors.mutedText,align:.center)
+        storyRetryButton=SKShapeNode(rectOf:CGSize(width:190,height:42));storyRetryButton!.position=CGPoint(x:-103,y:-80);styleArmor(storyRetryButton!,size:CGSize(width:190,height:42),color:NeonColors.green,selected:true);shade.addChild(storyRetryButton!)
+        storyRetryButton!.addChild(makeLabel(text:manager.isLastMission || manager.isReplay ? "OPERATIONS":"NEXT OPERATION",fontSize:10,fontName:"AvenirNext-Bold",color:.white))
+        mainMenuButton=SKShapeNode(rectOf:CGSize(width:190,height:42));mainMenuButton.position=CGPoint(x:103,y:-80);styleArmor(mainMenuButton,size:CGSize(width:190,height:42),color:.cyan);shade.addChild(mainMenuButton);mainMenuButton.addChild(makeLabel(text:"OPERATIONS",fontSize:10,fontName:"AvenirNext-Bold",color:.white))
+        shade.children.filter{$0 !== frame}.forEach{$0.zPosition=1}
+    }
+
+    func returnToStoryOperations() {
+        let select=StoryMissionSelectScene(size:size);select.scaleMode=scaleMode;view?.presentScene(select,transition:.fade(withDuration:0.3))
     }
 
     func showStoryFailure(reason:String) {
@@ -5575,9 +5646,9 @@ private extension GameScene {
         reportFrame.zPosition = 0; shade.addChild(reportFrame)
         let title=makeLabel(text:"MISSION FAILED",fontSize:30,fontName:"AvenirNext-Heavy",color:NeonColors.pink);title.position.y=62;shade.addChild(title)
         let detail=makeLabel(text:reason,fontSize:9,fontName:"AvenirNext-DemiBold",color:NeonColors.mutedText);detail.position.y=28;shade.addChild(detail)
-        storyRetryButton=SKShapeNode(rectOf:CGSize(width:190,height:44),cornerRadius:2);storyRetryButton!.position=CGPoint(x:-102,y:-35);storyRetryButton!.fillColor=NeonColors.cyan.withAlphaComponent(0.1);storyRetryButton!.strokeColor = .cyan;shade.addChild(storyRetryButton!);storyRetryButton!.addChild(makeLabel(text:"RETRY MISSION",fontSize:11,fontName:"AvenirNext-Bold",color:.white))
+        storyRetryButton=SKShapeNode(rectOf:CGSize(width:190,height:44),cornerRadius:2);storyRetryButton!.position=CGPoint(x:-102,y:-35);storyRetryButton!.fillColor=NeonColors.cyan.withAlphaComponent(0.1);storyRetryButton!.strokeColor = .cyan;shade.addChild(storyRetryButton!);storyRetryButton!.addChild(makeLabel(text:"RETRY CHECKPOINT",fontSize:11,fontName:"AvenirNext-Bold",color:.white))
         styleArmor(storyRetryButton!,size:CGSize(width:190,height:44),color:.cyan,selected:true)
-        mainMenuButton=SKShapeNode(rectOf:CGSize(width:190,height:44),cornerRadius:2);mainMenuButton.position=CGPoint(x:102,y:-35);mainMenuButton.fillColor=NeonColors.purple.withAlphaComponent(0.1);mainMenuButton.strokeColor=NeonColors.purple;shade.addChild(mainMenuButton);mainMenuButton.addChild(makeLabel(text:"MAIN MENU",fontSize:11,fontName:"AvenirNext-Bold",color:.white))
+        mainMenuButton=SKShapeNode(rectOf:CGSize(width:190,height:44),cornerRadius:2);mainMenuButton.position=CGPoint(x:102,y:-35);mainMenuButton.fillColor=NeonColors.purple.withAlphaComponent(0.1);mainMenuButton.strokeColor=NeonColors.purple;shade.addChild(mainMenuButton);mainMenuButton.addChild(makeLabel(text:"OPERATIONS",fontSize:11,fontName:"AvenirNext-Bold",color:.white))
         styleArmor(mainMenuButton,size:CGSize(width:190,height:44),color:NeonColors.purple)
         shade.children.filter { $0 !== reportFrame }.forEach { $0.zPosition = 1 }
     }

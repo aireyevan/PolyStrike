@@ -1,8 +1,19 @@
 import SpriteKit
 import UIKit
+import AVFoundation
 
 final class MainMenuScene: SKScene {
     private var modeBriefing: SKNode?
+    private var previewPlayer: AVQueuePlayer?
+    private var previewLooper: AVPlayerLooper?
+    private var previewTask: Task<Void,Never>?
+
+    override func willMove(from view:SKView) {stopMoviePreview()}
+    private func stopMoviePreview() {
+        previewTask?.cancel();previewTask=nil
+        previewPlayer?.pause();previewLooper?.disableLooping();previewLooper=nil
+        previewPlayer?.removeAllItems();previewPlayer=nil
+    }
 
     override func didMove(to view: SKView) {
         rebuild()
@@ -14,6 +25,7 @@ final class MainMenuScene: SKScene {
     override func didChangeSize(_ oldSize: CGSize) { if view != nil { rebuild() } }
 
     private func rebuild() {
+        stopMoviePreview()
         modeBriefing = nil
         removeAllChildren()
         removeAllActions()
@@ -82,6 +94,34 @@ final class MainMenuScene: SKScene {
             miniature.addChild(enemy)
             enemy.run(.repeatForever(.sequence([.moveBy(x:30,y:-55,duration:1.7),.moveBy(x:-30,y:55,duration:1.7)])))
         }
+        if let url=Bundle.main.url(forResource:"InfiniteArenaPreview",withExtension:"m4v") {
+            let player=AVQueuePlayer();player.isMuted=true;previewPlayer=player
+            let video=SKVideoNode(avPlayer:player);video.name="infiniteArenaMovie";video.zPosition=3
+            video.size=CGSize(width:frameSize.width-4,height:frameSize.height-44);video.position.y=20
+            let movieCrop=SKCropNode();movieCrop.position.y=20
+            let mask=SKShapeNode(rectOf:video.size);mask.fillColor = .white;mask.strokeColor = .clear;movieCrop.maskNode=mask
+            movieCrop.name="playPreview";movieCrop.zPosition=3;crop.addChild(movieCrop);video.position = .zero;movieCrop.addChild(video)
+            let asset=AVURLAsset(url:url)
+            previewTask=Task { @MainActor [weak self,weak video,weak miniature] in
+                do {
+                    _ = try await asset.load(.duration)
+                    guard let track=try await asset.loadTracks(withMediaType:.video).first else{return}
+                    let naturalSize=try await track.load(.naturalSize),transform=try await track.load(.preferredTransform)
+                    guard !Task.isCancelled,let self,self.previewPlayer === player,let video else{return}
+                    let transformed=naturalSize.applying(transform)
+                    let width=max(1,abs(transformed.width)),height=max(1,abs(transformed.height))
+                    let scale=max((frameSize.width-4)/width,(frameSize.height-44)/height)
+                    video.size=CGSize(width:width*scale,height:height*scale)
+                    let item=AVPlayerItem(asset:asset);item.preferredMaximumResolution=CGSize(width:1280,height:720)
+                    self.previewLooper=AVPlayerLooper(player:player,templateItem:item)
+                    miniature?.removeFromParent()
+                    player.play()
+                } catch {
+                    // Keep the lightweight arena preview when a bundled movie cannot be opened.
+                    if !Task.isCancelled {video?.removeFromParent()}
+                }
+            }
+        }
         let captionShade = SKShapeNode(rectOf: CGSize(width: frameSize.width - 2, height: 40))
         captionShade.position.y = -frameSize.height / 2 + 21
         captionShade.fillColor = SKColor(red: 0.025, green: 0.04, blue: 0.065, alpha: 0.96)
@@ -105,8 +145,8 @@ final class MainMenuScene: SKScene {
         let x = -frameSize.width/2+16
         menuText("02 / CAMPAIGN",on:tile,at:CGPoint(x:x,y:frameSize.height/2-17),size:8,color:NeonColors.orange)
         menuText("STORY MODE",on:tile,at:CGPoint(x:x,y:12),size:18,width:frameSize.width*0.6)
-        menuText("5 SECTORS. 21 OPERATIONS.",on:tile,at:CGPoint(x:x,y:-10),size:8,color:NeonColors.mutedText,width:frameSize.width*0.58)
-        menuText("FACE THE SECTOR GUARDIANS",on:tile,at:CGPoint(x:x,y:-26),size:7,color:NeonColors.mutedText,width:frameSize.width*0.58)
+        menuText("5 SECTORS. 40 OPERATIONS.",on:tile,at:CGPoint(x:x,y:-10),size:8,color:NeonColors.mutedText,width:frameSize.width*0.58)
+        menuText("120 STAGES. EVOLVING GUARDIANS.",on:tile,at:CGPoint(x:x,y:-26),size:7,color:NeonColors.mutedText,width:frameSize.width*0.58)
         menuText("OPEN CAMPAIGN →",on:tile,at:CGPoint(x:x,y:-frameSize.height/2+18),size:10,color:NeonColors.orange)
     }
 

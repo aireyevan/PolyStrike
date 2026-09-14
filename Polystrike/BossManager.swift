@@ -20,9 +20,9 @@ final class BossManager {
         hud.alpha=0;camera.addChild(hud)
     }
 
-    func startStory(mission: Mission, baseHealth: CGFloat, world: BossWorld) {
-        let types:[BossType]=[.hive,.pursuer,.sentinel,.architect,.core], type=types[min(4,mission.sector-1)]
-        start(BossEncounterContext(mode:.story,storySector:mission.sector,storyMission:mission.number,infiniteTier:nil,bossType:type,generation:BossGeneration(rawValue:min(5,mission.sector)) ?? .one),baseHealth:baseHealth,world:world,displayName:mission.bossName)
+    func startStory(mission: Mission, stage: MissionStage, baseHealth: CGFloat, world: BossWorld) {
+        let type=stage.bossType ?? .sentinel
+        start(BossEncounterContext(mode:.story,storySector:mission.sector,storyMission:mission.number,infiniteTier:nil,bossType:type,generation:BossGeneration(rawValue:max(1,min(5,mission.sector-(stage.type == .eliteHunt ? 1:0)))) ?? .one),baseHealth:baseHealth,world:world,displayName:stage.bossName)
     }
     func startInfinite(tier:Int,baseHealth:CGFloat,world:BossWorld) {
         let choices=BossType.allCases.filter{$0 != lastInfiniteType};let type=choices.randomElement() ?? .sentinel;lastInfiniteType=type
