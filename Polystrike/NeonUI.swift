@@ -13,10 +13,10 @@ struct NeonColors {
     )
 
     static let panel = SKColor(
-        red: 0.02,
-        green: 0.035,
-        blue: 0.07,
-        alpha: 0.94
+        red: 0.045,
+        green: 0.06,
+        blue: 0.085,
+        alpha: 1
     )
 
     static let cyan = SKColor(
@@ -74,172 +74,38 @@ struct NeonColors {
     )
 
     static let mutedText = SKColor(
-        white: 0.55,
+        white: 0.66,
         alpha: 1.0
     )
 }
 
 // MARK: - Neon Background
 
-func createNeonBackground(
-    for scene: SKScene,
-    gridSpacing: CGFloat = 45
-) {
-    scene.backgroundColor = NeonColors.background
-
-    // Grid
-
-    var x: CGFloat = 0
-
-    while x <= scene.size.width {
-
-        let path = CGMutablePath()
-
-        path.move(
-            to: CGPoint(
-                x: x,
-                y: 0
-            )
-        )
-
-        path.addLine(
-            to: CGPoint(
-                x: x,
-                y: scene.size.height
-            )
-        )
-
-        let line = SKShapeNode()
-        line.path = path
-        line.strokeColor = SKColor(white: 0.34, alpha: 0.055)
-        line.lineWidth = 0.55
-        line.zPosition = -20
-
-        scene.addChild(line)
-
-        x += gridSpacing
+func createNeonBackground(for scene: SKScene, gridSpacing: CGFloat = 45) {
+    scene.backgroundColor = SKColor(red: 0.018, green: 0.025, blue: 0.038, alpha: 1)
+    for side: CGFloat in [-1,1] {
+        let panel = SKShapeNode(path: armorPath(size: CGSize(width: scene.size.width*0.52, height: scene.size.height*1.5), cut: 65))
+        panel.fillColor = SKColor(red: 0.04, green: 0.055, blue: 0.075, alpha: 1)
+        panel.strokeColor = SKColor(white: 0.3, alpha: 0.18)
+        panel.zRotation = side * 0.25
+        panel.position = CGPoint(x: scene.size.width*(side < 0 ? 0.02 : 0.98), y:scene.size.height*0.5)
+        panel.zPosition = -20; scene.addChild(panel)
     }
-
-    var y: CGFloat = 0
-
-    while y <= scene.size.height {
-
-        let path = CGMutablePath()
-
-        path.move(
-            to: CGPoint(
-                x: 0,
-                y: y
-            )
-        )
-
-        path.addLine(
-            to: CGPoint(
-                x: scene.size.width,
-                y: y
-            )
-        )
-
-        let line = SKShapeNode()
-        line.path = path
-        line.strokeColor = SKColor(white: 0.34, alpha: 0.055)
-        line.lineWidth = 0.55
-        line.zPosition = -20
-
-        scene.addChild(line)
-
-        y += gridSpacing
+    let mesh = CGMutablePath()
+    for x in stride(from: CGFloat(0), through: scene.size.width, by: gridSpacing) {
+        mesh.move(to: CGPoint(x:x,y:0)); mesh.addLine(to:CGPoint(x:x+scene.size.height,y:scene.size.height))
     }
-
-    // Center glow
-
-    let glow = SKShapeNode(
-        circleOfRadius: scene.size.width * 0.35
-    )
-
-    glow.fillColor = SKColor(
-        red: 0,
-        green: 0.4,
-        blue: 0.6,
-        alpha: 0.025
-    )
-
-    glow.strokeColor = .clear
-
-    glow.position = CGPoint(
-        x: scene.size.width / 2,
-        y: scene.size.height / 2
-    )
-
-    glow.zPosition = -19
-
-    scene.addChild(glow)
-
-    // Sparse triangular circuitry breaks up the grid without turning menus
-    // into a second gameplay scene.
-    let facets = CGMutablePath()
-    let step = gridSpacing * 2
-    for x in stride(from: -step, through: scene.size.width + step, by: step) {
-        let offset = Int(x / step).isMultiple(of: 2) ? CGFloat(0) : gridSpacing
-        for y in stride(from: offset, through: scene.size.height, by: step) {
-            facets.move(to: CGPoint(x: x, y: y))
-            facets.addLine(to: CGPoint(x: x + gridSpacing, y: y + gridSpacing))
-            facets.addLine(to: CGPoint(x: x + step, y: y))
-        }
-    }
-    let facetLines = SKShapeNode(path: facets)
-    facetLines.strokeColor = NeonColors.purple.withAlphaComponent(0.055)
-    facetLines.lineWidth = 0.5
-    facetLines.zPosition = -18
-    scene.addChild(facetLines)
-
-    let pulse = SKAction.sequence([
-        SKAction.fadeAlpha(
-            to: 0.3,
-            duration: 2
-        ),
-        SKAction.fadeAlpha(
-            to: 0.7,
-            duration: 2
-        )
-    ])
-
-    glow.run(
-        SKAction.repeatForever(pulse)
-    )
+    let lines = SKShapeNode(path:mesh); lines.strokeColor = SKColor.white.withAlphaComponent(0.025)
+    lines.lineWidth = 0.5; lines.zPosition = -19; scene.addChild(lines)
 }
 
-/// Shared command-deck motion used by menus. It adds life without competing
-/// with labels or controls and keeps all animation behind interactive content.
 func addInterfaceAtmosphere(to scene: SKScene) {
-    let scanner = SKShapeNode(rectOf: CGSize(width: scene.size.width * 0.82, height: 1))
-    scanner.position = CGPoint(x: scene.size.width / 2, y: 22)
-    scanner.fillColor = SKColor.cyan.withAlphaComponent(0.18)
-    scanner.strokeColor = .clear
-    scanner.glowWidth = 5
-    scanner.zPosition = -9
-    scene.addChild(scanner)
-    scanner.run(.repeatForever(.sequence([
-        .group([.moveTo(y: scene.size.height - 22, duration: 5.5), .fadeAlpha(to: 0.04, duration: 5.5)]),
-        .group([.moveTo(y: 22, duration: 0), .fadeAlpha(to: 0.2, duration: 0)]),
-        .wait(forDuration: 1.2)
-    ])))
-
-    for index in 0..<12 {
-        let mote = SKShapeNode(circleOfRadius: index.isMultiple(of: 3) ? 1.4 : 0.7)
-        mote.position = CGPoint(
-            x: CGFloat((index * 113 + 29) % max(1, Int(scene.size.width))),
-            y: CGFloat((index * 71 + 43) % max(1, Int(scene.size.height)))
-        )
-        mote.fillColor = index.isMultiple(of: 2) ? .cyan : NeonColors.purple
-        mote.strokeColor = .clear
-        mote.alpha = 0.16
-        mote.zPosition = -7
-        scene.addChild(mote)
-        mote.run(.repeatForever(.sequence([
-            .group([.moveBy(x: 8, y: 13, duration: 2.4 + Double(index % 4)), .fadeAlpha(to: 0.48, duration: 2.4)]),
-            .group([.moveBy(x: -8, y: -13, duration: 2.4 + Double(index % 4)), .fadeAlpha(to: 0.12, duration: 2.4)])
-        ])))
+    for side: CGFloat in [-1,1] {
+        let seam = SKShapeNode(rectOf:CGSize(width:2,height:scene.size.height*0.54))
+        seam.position = CGPoint(x:scene.size.width*(side < 0 ? 0.035 : 0.965),y:scene.size.height*0.5)
+        seam.fillColor = (side < 0 ? SKColor.cyan : NeonColors.orange).withAlphaComponent(0.35)
+        seam.strokeColor = .clear; seam.zPosition = -10; scene.addChild(seam)
+        seam.run(.repeatForever(.sequence([.fadeAlpha(to:0.35,duration:2.5),.fadeAlpha(to:1,duration:2.5)])))
     }
 }
 
@@ -270,41 +136,21 @@ class NeonButton: SKNode {
 
         super.init()
 
-        background.fillColor = SKColor(red: 0.008, green: 0.014, blue: 0.028, alpha: 0.96)
-        background.strokeColor = color.withAlphaComponent(0.68)
-        background.lineWidth = 0.9
-        background.glowWidth = 1
-
+        styleArmor(background, size: size, color: color)
         titleLabel.text = title
-        titleLabel.fontSize = 20
+        titleLabel.fontSize = min(14, max(9, size.width * 0.085))
         titleLabel.fontColor = NeonColors.text
-
         titleLabel.horizontalAlignmentMode = .left
         titleLabel.verticalAlignmentMode = .center
-        titleLabel.position.x = -size.width / 2 + 30
-
-        background.zPosition = 0
-        titleLabel.zPosition = 1
-
-        addChild(background)
-        addChild(titleLabel)
-
-        let selector = SKShapeNode(rectOf: CGSize(width: 7, height: 7), cornerRadius: 0.5)
-        selector.zRotation = .pi / 4
-        selector.position.x = -size.width / 2 + 15
-        selector.fillColor = color
-        selector.strokeColor = .white
-        selector.lineWidth = 0.5
-        selector.glowWidth = 3
-        selector.zPosition = 2
-        addChild(selector)
-
-        let terminal = SKShapeNode(rectOf: CGSize(width: 22, height: 1))
-        terminal.position.x = size.width / 2 - 18
-        terminal.fillColor = color.withAlphaComponent(0.65)
-        terminal.strokeColor = .clear
-        terminal.zPosition = 2
-        addChild(terminal)
+        titleLabel.position.x = -size.width / 2 + 18
+        titleLabel.zPosition = 3
+        if titleLabel.frame.width > size.width - 44 { titleLabel.setScale((size.width-44)/titleLabel.frame.width) }
+        addChild(background); addChild(titleLabel)
+        let arrow = SKShapeNode(path: {
+            let p = CGMutablePath(); p.move(to:CGPoint(x:-3,y:4)); p.addLine(to:CGPoint(x:1,y:0)); p.addLine(to:CGPoint(x:-3,y:-4)); return p
+        }())
+        arrow.position.x = size.width/2-14; arrow.strokeColor = color; arrow.lineWidth = 1.5
+        addChild(arrow)
 
         name = "neonButton"
     }
@@ -398,4 +244,72 @@ func transitionToScene(
         nextScene,
         transition: transition
     )
+}
+
+// Shared cut-metal surfaces used only by menu and overlay UI.
+func armorPath(size: CGSize, cut: CGFloat = 10) -> CGPath {
+    let w = size.width / 2, h = size.height / 2, c = min(cut, min(w,h) * 0.45)
+    let p = CGMutablePath()
+    p.move(to: CGPoint(x: -w+c, y: h))
+    for point in [CGPoint(x:w,y:h),CGPoint(x:w,y:-h+c),CGPoint(x:w-c,y:-h),
+                  CGPoint(x:-w,y:-h),CGPoint(x:-w,y:h-c)] { p.addLine(to: point) }
+    p.closeSubpath(); return p
+}
+
+func styleArmor(_ node: SKShapeNode, size: CGSize, color: SKColor, selected: Bool = false) {
+    node.path = armorPath(size: size)
+    node.fillColor = selected ? SKColor(red: 0.075, green: 0.12, blue: 0.16, alpha: 1) : NeonColors.panel
+    node.strokeColor = selected ? color : SKColor(red: 0.25, green: 0.31, blue: 0.38, alpha: 0.85)
+    node.lineWidth = selected ? 1.5 : 1
+    node.glowWidth = 0
+    node.childNode(withName: "armorTrim")?.removeFromParent()
+    let trim = SKNode(); trim.name = "armorTrim"; node.addChild(trim)
+    let seam = SKShapeNode(rectOf: CGSize(width: max(8,size.width-24), height: 1))
+    seam.position.y = size.height / 2 - 5
+    seam.fillColor = SKColor.white.withAlphaComponent(0.12); seam.strokeColor = .clear
+    trim.addChild(seam)
+    let strip = SKShapeNode(rectOf: CGSize(width: min(34,size.width*0.17), height: 2))
+    strip.position = CGPoint(x: -size.width/2+12+min(34,size.width*0.17)/2, y: size.height/2)
+    strip.fillColor = color; strip.strokeColor = .clear; trim.addChild(strip)
+    // Decorative children intentionally have no action names; hit testing walks ancestors.
+}
+
+func armorPanel(size: CGSize, color: SKColor, selected: Bool = false) -> SKShapeNode {
+    let node = SKShapeNode(); styleArmor(node, size: size, color: color, selected: selected); return node
+}
+
+func menuBounds(_ scene: SKScene) -> CGRect {
+    var safe = scene.view?.safeAreaInsets ?? .zero
+    if UIDevice.current.userInterfaceIdiom == .phone && safe.left < 1 && safe.right < 1 {
+        safe.left = 59; safe.right = 59; safe.bottom = max(21,safe.bottom)
+    }
+    return CGRect(x: safe.left+18, y: safe.bottom+14,
+                  width: max(1,scene.size.width-safe.left-safe.right-36),
+                  height: max(1,scene.size.height-safe.top-safe.bottom-28))
+}
+
+func menuActionNames(at point: CGPoint, in node: SKNode) -> [String] {
+    node.nodes(at: point).flatMap { hit -> [String] in
+        var names: [String] = []; var current: SKNode? = hit
+        while let item = current, item !== node { if let name = item.name { names.append(name) }; current = item.parent }
+        return names
+    }
+}
+
+@discardableResult
+func menuText(_ text: String, on parent: SKNode, at position: CGPoint, size: CGFloat = 10,
+              color: SKColor = .white, align: SKLabelHorizontalAlignmentMode = .left,
+              width: CGFloat? = nil) -> SKLabelNode {
+    let label = createNeonLabel(text: text, fontSize: size, color: color)
+    label.horizontalAlignmentMode = align; label.position = position; label.zPosition = 5
+    if let width, label.frame.width > width { label.setScale(max(0.1,width / label.frame.width)) }
+    parent.addChild(label); return label
+}
+
+func menuHeader(_ title: String, subtitle: String, on scene: SKScene, bounds: CGRect, color: SKColor) {
+    menuText(title, on: scene, at: CGPoint(x:bounds.minX,y:bounds.maxY-9),size:24,width:bounds.width-145)
+    menuText(subtitle, on: scene, at: CGPoint(x:bounds.minX,y:bounds.maxY-32),size:8,color:color,width:bounds.width-145)
+    let rule = SKShapeNode(rectOf: CGSize(width:bounds.width,height:1))
+    rule.position = CGPoint(x:bounds.midX,y:bounds.maxY-48)
+    rule.fillColor = SKColor.white.withAlphaComponent(0.15); rule.strokeColor = .clear; scene.addChild(rule)
 }

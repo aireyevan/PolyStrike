@@ -1,10 +1,7 @@
 import SpriteKit
 import UIKit
-import AVFoundation
 
 final class MainMenuScene: SKScene {
-    private var previewPlayer: AVQueuePlayer?
-    private var previewLooper: AVPlayerLooper?
     private var modeBriefing: SKNode?
 
     override func didMove(to view: SKView) {
@@ -17,108 +14,35 @@ final class MainMenuScene: SKScene {
     override func didChangeSize(_ oldSize: CGSize) { if view != nil { rebuild() } }
 
     private func rebuild() {
-        previewPlayer?.pause()
-        previewLooper = nil
-        previewPlayer = nil
         modeBriefing = nil
         removeAllChildren()
         removeAllActions()
-        backgroundColor = NeonColors.background
-        buildBackdrop()
-        buildDistantBattle()
+        createNeonBackground(for: self)
         addInterfaceAtmosphere(to: self)
-        var safe = view?.safeAreaInsets ?? .zero
-        // The first SpriteKit frame can arrive before UIKit has calculated the
-        // landscape cutout. Use conservative phone insets until UIKit refreshes.
-        if UIDevice.current.userInterfaceIdiom == .phone && safe.left < 1 && safe.right < 1 {
-            safe.left = 59
-            safe.right = 59
-            safe.bottom = max(safe.bottom, 21)
-        }
-        let leftEdge = safe.left + 18
-        let rightEdge = size.width - safe.right - 18
-        let bottomEdge = safe.bottom + 14
-        let usableWidth = max(560, rightEdge - leftEdge)
-        let usableHeight = max(280, size.height - safe.top - safe.bottom)
-        let headerY = size.height - safe.top - 24
-        label("SELECT MODE", x: leftEdge, y: headerY, size: 20, color: NeonColors.orange, alignment: .left)
-        let headerRule = SKShapeNode(rectOf: CGSize(width: usableWidth, height: 1))
-        headerRule.position = CGPoint(x: (leftEdge + rightEdge) / 2, y: headerY - 19)
-        headerRule.fillColor = SKColor.white.withAlphaComponent(0.14)
-        headerRule.strokeColor = .clear
-        addChild(headerRule)
-
-        let currentLevel = PlayerProgress.shared.rankLevel
-        let rankIcon = RankEmblemNode(level: currentLevel, size: 34)
-        rankIcon.position = CGPoint(x: rightEdge - 18, y: headerY - 1)
-        rankIcon.zPosition = 5
-        addChild(rankIcon)
-        label("LEVEL \(currentLevel)", x: rightEdge - 42, y: headerY + 2, size: 9, color: .white, alignment: .right)
-        label(PlayerProgress.rankTitle(for: currentLevel).uppercased(), x: rightEdge - 42, y: headerY - 11, size: 6, color: NeonColors.mutedText, alignment: .right)
-
-        let gutter: CGFloat = 10
-        let previewHeight = min(165, usableHeight * 0.41)
-        let previewWidth = min((usableWidth - gutter) / 2, previewHeight * 1.62)
-        let previewGroupWidth = previewWidth * 2 + gutter
-        let previewLeft = leftEdge + (usableWidth - previewGroupWidth) / 2
-        let previewY = headerY - 31 - previewHeight / 2
-        buildArenaDisplay(at: CGPoint(x: previewLeft + previewWidth / 2, y: previewY), frameSize: CGSize(width: previewWidth, height: previewHeight))
-        buildStoryPreview(at: CGPoint(x: previewLeft + previewWidth + gutter + previewWidth / 2, y: previewY), frameSize: CGSize(width: previewWidth, height: previewHeight))
-
-        let gridTop = previewY - previewHeight / 2 - gutter
-        let buttonHeight = max(40, min(49, (gridTop - bottomEdge - gutter) / 2))
-        let buttonWidth = (usableWidth - gutter * 2) / 3
-        let row1Y = gridTop - buttonHeight / 2
-        let row2Y = row1Y - buttonHeight - gutter
-        let column1 = leftEdge + buttonWidth / 2
-        let column2 = leftEdge + buttonWidth + gutter + buttonWidth / 2
-        let column3 = leftEdge + (buttonWidth + gutter) * 2 + buttonWidth / 2
-        menuButton("INFINITE MODE", name: "play", x: column1, y: row1Y, color: .cyan, size: CGSize(width: buttonWidth, height: buttonHeight), selected: true)
-        menuButton("STORY MODE", name: "storyMode", x: column2, y: row1Y, color: NeonColors.orange, size: CGSize(width: buttonWidth, height: buttonHeight))
-        menuButton("STORE", name: "store", x: column3, y: row1Y, color: NeonColors.purple, size: CGSize(width: buttonWidth, height: buttonHeight))
-        menuButton("BARRACKS", name: "barracks", x: column1, y: row2Y, color: NeonColors.green, size: CGSize(width: buttonWidth, height: buttonHeight))
-        menuButton("SETTINGS", name: "settings", x: column2, y: row2Y, color: NeonColors.blue, size: CGSize(width: buttonWidth, height: buttonHeight))
-        menuButton("LEADERBOARDS  /  SOON", name: "leaderboards", x: column3, y: row2Y, color: NeonColors.pink, size: CGSize(width: buttonWidth, height: buttonHeight), enabled: false)
-        label("POLYSTRIKE / MAIN", x: leftEdge, y: bottomEdge - 2, size: 7, color: NeonColors.mutedText, alignment: .left)
-    }
-
-    private func buildBackdrop() {
-        let grid = CGMutablePath()
-        for x in stride(from: CGFloat(-size.height), through: size.width, by: 58) {
-            grid.move(to: CGPoint(x: x, y: 0))
-            grid.addLine(to: CGPoint(x: x + size.height * 0.5, y: size.height))
-        }
-        for y in stride(from: CGFloat(0), through: size.height, by: 45) {
-            grid.move(to: CGPoint(x: 0, y: y))
-            grid.addLine(to: CGPoint(x: size.width, y: y))
-        }
-        let lines = SKShapeNode(path: grid)
-        lines.strokeColor = SKColor(red: 0.08, green: 0.20, blue: 0.30, alpha: 0.35)
-        lines.lineWidth = 0.7
-        lines.zPosition = -10
-        addChild(lines)
-        for i in 0..<12 {
-            let mote = SKShapeNode(circleOfRadius: i % 3 == 0 ? 1.6 : 0.8)
-            mote.fillColor = i % 2 == 0 ? .cyan : NeonColors.purple
-            mote.strokeColor = .clear
-            mote.alpha = 0.18
-            let x = CGFloat((i * 137 + 43) % max(1, Int(size.width)))
-            let y = CGFloat((i * 83 + 17) % max(1, Int(size.height)))
-            mote.position = CGPoint(x: x, y: y)
-            mote.zPosition = -5
-            addChild(mote)
-            mote.run(.repeatForever(.sequence([
-                .group([.moveBy(x: 20, y: 30, duration: 4), .fadeAlpha(to: 0.55, duration: 4)]),
-                .group([.moveBy(x: -20, y: -30, duration: 4), .fadeAlpha(to: 0.12, duration: 4)])
-            ])))
-        }
-        for (x, color) in [(size.width * 0.05, SKColor.cyan), (size.width * 0.49, NeonColors.purple)] {
-            let rail = SKShapeNode(rectOf: CGSize(width: 2, height: size.height * 0.45))
-            rail.position = CGPoint(x: x, y: size.height * 0.50)
-            rail.fillColor = color.withAlphaComponent(0.25)
-            rail.strokeColor = .clear
-            rail.glowWidth = 1
-            addChild(rail)
+        let bounds = menuBounds(self)
+        menuHeader("POLYSTRIKE", subtitle: "COMMAND DECK / SELECT YOUR NEXT BATTLE", on:self, bounds:bounds, color:.cyan)
+        let level = PlayerProgress.shared.rankLevel
+        let emblem = RankEmblemNode(level:level,size:38)
+        emblem.position = CGPoint(x:bounds.maxX-20,y:bounds.maxY-17); addChild(emblem)
+        label("LEVEL \(level)",x:bounds.maxX-48,y:bounds.maxY-10,size:10,color:.white,alignment:.right)
+        label("COMBAT RECORD",x:bounds.maxX-48,y:bounds.maxY-26,size:7,color:NeonColors.mutedText,alignment:.right)
+        let gap: CGFloat = 12
+        let footerHeight: CGFloat = 46
+        let heroHeight = max(100,bounds.height-126)
+        let heroWidth = (bounds.width-gap)/2
+        let heroY = bounds.maxY-60-heroHeight/2
+        buildArenaDisplay(at:CGPoint(x:bounds.minX+heroWidth/2,y:heroY),frameSize:CGSize(width:heroWidth,height:heroHeight))
+        buildStoryPreview(at:CGPoint(x:bounds.maxX-heroWidth/2,y:heroY),frameSize:CGSize(width:heroWidth,height:heroHeight))
+        let titles = ["ARMORY", "BARRACKS", "SETTINGS", "LEADERBOARDS"]
+        let names = ["store", "barracks", "settings", "leaderboards"]
+        let colors: [SKColor] = [NeonColors.orange,.cyan,NeonColors.purple,NeonColors.mutedText]
+        let width = (bounds.width-gap*3)/4
+        for index in 0..<4 {
+            let button = NeonButton(title:titles[index],size:CGSize(width:width,height:footerHeight),color:colors[index])
+            button.name = names[index]
+            button.position = CGPoint(x:bounds.minX+width/2+CGFloat(index)*(width+gap),y:bounds.minY+footerHeight/2+9)
+            if index == 3 { button.alpha = 0.42; button.titleLabel.text = "LEADERBOARDS - SOON" }
+            addChild(button)
         }
     }
 
@@ -132,7 +56,7 @@ final class MainMenuScene: SKScene {
         frame.name = "playPreview"
         frame.fillColor = NeonColors.panel.withAlphaComponent(0.7)
         frame.strokeColor = SKColor.cyan.withAlphaComponent(0.28)
-        frame.lineWidth = 1
+        styleArmor(frame, size: frameSize, color: .cyan, selected: true)
         display.addChild(frame)
         let crop = SKCropNode()
         let cropMask = SKShapeNode(rectOf: CGSize(width: frameSize.width - 4, height: frameSize.height - 4), cornerRadius: 1)
@@ -142,86 +66,48 @@ final class MainMenuScene: SKScene {
         crop.zPosition = 2
         crop.name = "playPreview"
         display.addChild(crop)
-        if let url = Bundle.main.url(forResource: "InfiniteArenaPreview", withExtension: "m4v") {
-            let player = AVQueuePlayer()
-            player.isMuted = true
-            player.actionAtItemEnd = .none
-            let item = AVPlayerItem(url: url)
-            previewLooper = AVPlayerLooper(player: player, templateItem: item)
-            previewPlayer = player
-
-            let video = SKVideoNode(avPlayer: player)
-            let aspectHeight = frameSize.width * 9 / 16
-            video.size = CGSize(width: frameSize.width, height: max(frameSize.height, aspectHeight))
-            video.zPosition = 1
-            crop.addChild(video)
-            player.play()
-        } else {
-            let unavailable = createNeonLabel(text: "PREVIEW OFFLINE", fontSize: 10, color: NeonColors.mutedText)
-            crop.addChild(unavailable)
+        let arena = LivingArena(phase:9,center:.zero)
+        let miniature = SKNode()
+        let scale = min((frameSize.width-22)/arena.bounds.width,(frameSize.height-48)/arena.bounds.height)
+        miniature.setScale(scale); miniature.position.y = 16
+        crop.addChild(miniature)
+        miniature.addChild(arena.makeBackdrop())
+        let ship = Player(style:PlayerProgress.shared.selectedShip); ship.physicsBody = nil; ship.setScale(2)
+        ship.position = CGPoint(x:-120,y:0); miniature.addChild(ship)
+        ship.run(.repeatForever(.sequence([.moveTo(x:120,duration:2),.rotate(byAngle:.pi,duration:0.3),
+                                          .moveTo(x:-120,duration:2),.rotate(byAngle:.pi,duration:0.3)])))
+        for index in 0..<5 {
+            let enemy = Enemy(); enemy.physicsBody = nil; enemy.configureVisual(archetype:index%3)
+            enemy.setScale(1.6); enemy.position = CGPoint(x:CGFloat(index-2)*100,y:180)
+            miniature.addChild(enemy)
+            enemy.run(.repeatForever(.sequence([.moveBy(x:30,y:-55,duration:1.7),.moveBy(x:-30,y:55,duration:1.7)])))
         }
         let captionShade = SKShapeNode(rectOf: CGSize(width: frameSize.width - 2, height: 40))
         captionShade.position.y = -frameSize.height / 2 + 21
-        captionShade.fillColor = SKColor.black.withAlphaComponent(0.58)
+        captionShade.fillColor = SKColor(red: 0.025, green: 0.04, blue: 0.065, alpha: 0.96)
         captionShade.strokeColor = .clear
         frame.zPosition = 1
         captionShade.zPosition = 20
         frame.addChild(captionShade)
         let caption = createNeonLabel(text: "INFINITE ARENA", fontSize: 14, color: .white)
-        caption.position.y = -4
+        caption.position.y = 5
         captionShade.addChild(caption)
+        menuText("ENDLESS WAVES  /  DEPLOY →",on:captionShade,at:CGPoint(x:0,y:-11),size:8,color:.cyan,align:.center)
+
+
     }
 
     private func buildStoryPreview(at center: CGPoint, frameSize: CGSize) {
-        let tile = SKShapeNode(rectOf: frameSize, cornerRadius: 1)
-        tile.name = "storyMode"
-        tile.position = center
-        tile.fillColor = SKColor(red: 0.035, green: 0.012, blue: 0.055, alpha: 0.96)
-        tile.strokeColor = NeonColors.orange.withAlphaComponent(0.42)
-        tile.lineWidth = 1
-        tile.zPosition = 1
-        addChild(tile)
-
-        for scale: CGFloat in [0.30, 0.52, 0.76] {
-            let diamond = SKShapeNode(rectOf: CGSize(width: frameSize.height * scale, height: frameSize.height * scale))
-            diamond.zRotation = .pi / 4
-            diamond.strokeColor = NeonColors.orange.withAlphaComponent(0.10 + scale * 0.18)
-            diamond.lineWidth = 1
-            tile.addChild(diamond)
-            diamond.run(.repeatForever(.sequence([.fadeAlpha(to: 0.32, duration: 1.4), .fadeAlpha(to: 1, duration: 1.4)])))
-        }
-
-        let lock = SKShapeNode(path: {
-            let path = CGMutablePath()
-            path.move(to: CGPoint(x: -10, y: 2))
-            path.addLine(to: CGPoint(x: 0, y: 12))
-            path.addLine(to: CGPoint(x: 10, y: 2))
-            path.addLine(to: CGPoint(x: 0, y: -8))
-            path.closeSubpath()
-            return path
-        }())
-        lock.fillColor = NeonColors.orange.withAlphaComponent(0.14)
-        lock.strokeColor = NeonColors.orange
-        lock.glowWidth = 3
-        lock.position.y = 16
-        tile.addChild(lock)
-
-        let title = createNeonLabel(text: "STORY MODE", fontSize: 14, color: .white)
-        title.position.y = -16
-        tile.addChild(title)
-        let status = createNeonLabel(text: "5 SECTORS  •  21 MISSIONS", fontSize: 8, color: NeonColors.orange)
-        status.position.y = -37
-        tile.addChild(status)
-
-        let scan = SKShapeNode(rectOf: CGSize(width: frameSize.width - 22, height: 1))
-        scan.fillColor = NeonColors.orange.withAlphaComponent(0.45)
-        scan.strokeColor = .clear
-        scan.position.y = -frameSize.height / 2 + 9
-        tile.addChild(scan)
-        scan.run(.repeatForever(.sequence([
-            .moveTo(y: frameSize.height / 2 - 9, duration: 2.4),
-            .moveTo(y: -frameSize.height / 2 + 9, duration: 0)
-        ])))
+        let tile = armorPanel(size:frameSize,color:NeonColors.orange)
+        tile.name = "storyMode"; tile.position = center; addChild(tile)
+        let crest = RankEmblemNode(level:400,size:min(100,frameSize.height*0.62))
+        crest.position = CGPoint(x:frameSize.width*0.27,y:9); crest.alpha = 0.8; tile.addChild(crest)
+        let x = -frameSize.width/2+16
+        menuText("02 / CAMPAIGN",on:tile,at:CGPoint(x:x,y:frameSize.height/2-17),size:8,color:NeonColors.orange)
+        menuText("STORY MODE",on:tile,at:CGPoint(x:x,y:12),size:18,width:frameSize.width*0.6)
+        menuText("5 SECTORS. 21 OPERATIONS.",on:tile,at:CGPoint(x:x,y:-10),size:8,color:NeonColors.mutedText,width:frameSize.width*0.58)
+        menuText("FACE THE SECTOR GUARDIANS",on:tile,at:CGPoint(x:x,y:-26),size:7,color:NeonColors.mutedText,width:frameSize.width*0.58)
+        menuText("OPEN CAMPAIGN →",on:tile,at:CGPoint(x:x,y:-frameSize.height/2+18),size:10,color:NeonColors.orange)
     }
 
     private func label(_ text: String, x: CGFloat, y: CGFloat, size: CGFloat, color: SKColor, alignment: SKLabelHorizontalAlignmentMode = .center) {
@@ -277,6 +163,7 @@ final class MainMenuScene: SKScene {
         panel.fillColor = SKColor(red: 0.009, green: 0.019, blue: 0.04, alpha: 0.98)
         panel.strokeColor = SKColor.cyan.withAlphaComponent(0.72)
         panel.lineWidth = 1
+        styleArmor(panel,size:CGSize(width:panelWidth,height:panelHeight),color:.cyan)
         overlay.addChild(panel)
 
         let marker = SKShapeNode(rectOf: CGSize(width: 8, height: 8))
@@ -324,7 +211,7 @@ final class MainMenuScene: SKScene {
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let point = touches.first?.location(in: self) else { return }
-        let names = nodes(at: point).compactMap { $0.name ?? $0.parent?.name }
+        let names = menuActionNames(at: point, in: self)
         if modeBriefing != nil {
             if names.contains("startInfinite") {
                 let scene = GameScene(size: size)
@@ -346,8 +233,7 @@ final class MainMenuScene: SKScene {
             view?.presentScene(scene, transition: .fade(withDuration: 0.3))
             return
         }
-        for node in nodes(at: point) {
-            let name = node.name ?? node.parent?.name
+        for name in menuActionNames(at: point, in: self) {
             if name == "store" || name == "barracks" || name == "settings" {
                 let scene: SKScene
                 switch name {
@@ -609,22 +495,21 @@ final class BarracksScene: SKScene {
         createNeonBackground(for: self, gridSpacing: 54)
         addInterfaceAtmosphere(to: self)
         let progress = PlayerProgress.shared
-        let insets = view?.safeAreaInsets ?? .zero
-        let left = insets.left + 20
-        let right = size.width - insets.right - 20
-        let top = size.height - insets.top - 18
-        let bottom = insets.bottom + 12
-        let contentWidth = max(620, right - left)
+        let bounds = menuBounds(self)
+        let left = bounds.minX
+        let right = bounds.maxX
+        let top = bounds.maxY
+        let bottom = bounds.minY
+        let contentWidth = bounds.width
         let gap: CGFloat = 12
         let rankWidth = contentWidth * 0.30
         let statsWidth = contentWidth - rankWidth - gap
         let panelsTop = top - 58
         let panelsBottom = bottom + 112
-        let panelsHeight = max(150, panelsTop - panelsBottom)
+        let panelsHeight = max(110, panelsTop - panelsBottom)
         let panelsY = panelsBottom + panelsHeight / 2
 
-        addLabel("BARRACKS", at: CGPoint(x: left + 76, y: top - 9), size: 23, color: .cyan)
-        addLabel("CAREER RECORD  /  RANK PROGRESSION", at: CGPoint(x: left + 118, y: top - 32), size: 8, color: NeonColors.mutedText)
+        menuHeader("BARRACKS",subtitle:"CAREER RECORD / RANK PROGRESSION",on:self,bounds:bounds,color:.cyan)
 
         let rankPanel = panel(size: CGSize(width: rankWidth, height: panelsHeight), color: .cyan)
         rankPanel.position = CGPoint(x: left + rankWidth / 2, y: panelsY)
@@ -666,7 +551,7 @@ final class BarracksScene: SKScene {
             ("CURRENT FLUX", number(progress.flux))
         ]
         let cardWidth = statsWidth * 0.46
-        let cardHeight = max(28, (panelsHeight - 32) / 4 - 5)
+        let cardHeight = max(20, (panelsHeight - 24) / 4 - 5)
         let rowStep = cardHeight + 5
         let firstRowY = panelsHeight / 2 - cardHeight / 2 - 12
         for (index, stat) in stats.enumerated() {
@@ -676,6 +561,7 @@ final class BarracksScene: SKScene {
                                     y: firstRowY - CGFloat(row) * rowStep)
             card.fillColor = SKColor(red: 0.015, green: 0.025, blue: 0.055, alpha: 0.92)
             card.strokeColor = (column == 0 ? SKColor.cyan : NeonColors.purple).withAlphaComponent(0.32)
+            styleArmor(card,size:CGSize(width:cardWidth,height:cardHeight),color:column == 0 ? .cyan : NeonColors.orange)
             statPanel.addChild(card)
             let title = createNeonLabel(text: stat.0, fontSize: 7, color: NeonColors.mutedText)
             title.position.y = cardHeight * 0.22
@@ -685,7 +571,7 @@ final class BarracksScene: SKScene {
             card.addChild(value)
         }
 
-        addLabel("CENTURY EMBLEMS", at: CGPoint(x: left + 72, y: bottom + 94), size: 9, color: NeonColors.mutedText)
+        addLabel("PRESTIGE INSIGNIA", at: CGPoint(x: left + 72, y: bottom + 94), size: 9, color: NeonColors.mutedText)
         for index in 1...10 {
             let milestone = index * 100
             let locked = progress.rankLevel < milestone
@@ -706,12 +592,7 @@ final class BarracksScene: SKScene {
     }
 
     private func panel(size: CGSize, color: SKColor) -> SKShapeNode {
-        let node = SKShapeNode(rectOf: size, cornerRadius: 2)
-        node.fillColor = NeonColors.panel.withAlphaComponent(0.95)
-        node.strokeColor = color.withAlphaComponent(0.38)
-        node.lineWidth = 1.5
-        node.glowWidth = 0
-        return node
+        armorPanel(size:size,color:color)
     }
 
     private func addLabel(_ text: String, at point: CGPoint, size: CGFloat, color: SKColor) {
@@ -738,7 +619,7 @@ final class BarracksScene: SKScene {
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let point = touches.first?.location(in: self) else { return }
-        for node in nodes(at: point) where node.name == "back" || node.parent?.name == "back" {
+        if menuActionNames(at:point,in:self).contains("back") {
             let scene = MainMenuScene(size: size)
             scene.scaleMode = .resizeFill
             view?.presentScene(scene, transition: .fade(withDuration: 0.2))
@@ -748,174 +629,54 @@ final class BarracksScene: SKScene {
 }
 
 
-private extension MainMenuScene {
-    func buildDistantBattle() {
-        for i in 0..<8 {
-            let group = SKNode()
-            group.position = CGPoint(x: size.width * CGFloat(i + 1) / 9, y: size.height * (i % 2 == 0 ? 0.82 : 0.18))
-            group.zPosition = -4
-            group.alpha = i % 3 == 0 ? 0.24 : 0.17
-            addChild(group)
-            let shape: SKShapeNode
-            if i % 3 == 0 {
-                let path = CGMutablePath()
-                for vertex in 0..<6 {
-                    let angle = CGFloat(vertex) * .pi / 3
-                    let point = CGPoint(x: cos(angle) * 22, y: sin(angle) * 22)
-                    if vertex == 0 { path.move(to: point) } else { path.addLine(to: point) }
-                }
-                path.closeSubpath()
-                shape = SKShapeNode(path: path)
-                shape.strokeColor = .orange
-            } else if i % 3 == 1 {
-                shape = Player()
-                shape.physicsBody = nil
-                shape.strokeColor = .cyan
-            } else {
-                shape = SKShapeNode(circleOfRadius: 13)
-                shape.strokeColor = NeonColors.pink
-            }
-            shape.fillColor = shape.strokeColor.withAlphaComponent(0.16)
-            shape.lineWidth = 1.5
-            shape.glowWidth = 2
-            group.addChild(shape)
-            let dx: CGFloat = i % 2 == 0 ? 32 : -32
-            group.run(.repeatForever(.sequence([.moveBy(x: dx, y: 20, duration: 7), .moveBy(x: -dx, y: -20, duration: 7)])))
-            shape.run(.repeatForever(.sequence([
-                .group([.moveBy(x: 5, y: 3, duration: 2.8 + Double(i) * 0.2), .fadeAlpha(to: 0.55, duration: 2.8)]),
-                .group([.moveBy(x: -5, y: -3, duration: 2.8 + Double(i) * 0.2), .fadeAlpha(to: 1, duration: 2.8)])
-            ])))
-            // A bounded repeating trail suggests distant fire without cluttering the controls.
-            for shotIndex in 0..<2 {
-                let shot = SKShapeNode(rectOf: CGSize(width: 8, height: 2), cornerRadius: 1)
-                shot.fillColor = shape.strokeColor
-                shot.strokeColor = .clear
-                shot.alpha = 0
-                group.addChild(shot)
-                shot.run(.repeatForever(.sequence([
-                    .wait(forDuration: Double(i) * 0.2 + Double(shotIndex) * 0.35 + 1),
-                    .run { [weak shot] in shot?.position = .zero; shot?.alpha = 0.8 },
-                    .group([.moveBy(x: dx * 3, y: 15, duration: 1.1), .fadeOut(withDuration: 1.1)]),
-                    .wait(forDuration: 2)
-                ])))
-            }
-        }
-    }
-}
-
 final class SettingsScene: SKScene {
     override func didMove(to view: SKView) { rebuild() }
     override func didChangeSize(_ oldSize: CGSize) { if view != nil { rebuild() } }
     private func rebuild() {
-        removeAllChildren()
-        createNeonBackground(for: self, gridSpacing: 55)
-        addInterfaceAtmosphere(to: self)
-        let title = createNeonLabel(text: "CONTROL SYSTEMS", fontSize: 22, color: .cyan)
-        title.horizontalAlignmentMode = .left
-        title.position = CGPoint(x: 34, y: size.height - 40)
-        addChild(title)
-        let subtitle = createNeonLabel(text: "VISUAL FEEDBACK / TWIN-STICK INTERFACE", fontSize: 8, color: NeonColors.mutedText)
-        subtitle.horizontalAlignmentMode = .left
-        subtitle.position = CGPoint(x: 36, y: size.height - 62)
-        addChild(subtitle)
-
-        let previewWidth = min(210, size.width * 0.27)
-        let preview = SKShapeNode(rectOf: CGSize(width: previewWidth, height: size.height * 0.54), cornerRadius: 2)
-        preview.position = CGPoint(x: 36 + previewWidth / 2, y: size.height * 0.48)
-        preview.fillColor = NeonColors.panel
-        preview.strokeColor = NeonColors.purple.withAlphaComponent(0.45)
-        preview.glowWidth = 0
-        addChild(preview)
-        let previewTitle = createNeonLabel(text: "INPUT LINK", fontSize: 10, color: NeonColors.purple)
-        previewTitle.position = CGPoint(x: 0, y: size.height * 0.19)
-        preview.addChild(previewTitle)
-        for (x, caption) in [(-previewWidth * 0.23, "MOVE"), (previewWidth * 0.23, "AIM")] {
-            let outer = SKShapeNode(circleOfRadius: 26)
-            outer.position = CGPoint(x: x, y: 4)
-            outer.fillColor = SKColor.cyan.withAlphaComponent(0.035)
-            outer.strokeColor = SKColor.cyan.withAlphaComponent(0.4)
-            outer.lineWidth = 1
-            preview.addChild(outer)
-            let thumb = SKShapeNode(circleOfRadius: 9)
-            thumb.fillColor = .cyan
-            thumb.strokeColor = .white
-            thumb.glowWidth = 5
-            outer.addChild(thumb)
-            thumb.run(.repeatForever(.sequence([
-                .move(to: CGPoint(x: x < 0 ? 10 : -8, y: x < 0 ? 6 : 10), duration: 1.4),
-                .move(to: CGPoint(x: -5, y: -7), duration: 1.4),
-                .move(to: .zero, duration: 0.8)
-            ])))
-            let label = createNeonLabel(text: caption, fontSize: 8, color: NeonColors.mutedText)
-            label.position = CGPoint(x: x, y: -42)
-            preview.addChild(label)
+        removeAllChildren(); createNeonBackground(for:self); addInterfaceAtmosphere(to:self)
+        let b = menuBounds(self)
+        menuHeader("SETTINGS",subtitle:"PILOT INTERFACE / CONTROL CONFIGURATION",on:self,bounds:b,color:NeonColors.purple)
+        let back = NeonButton(title:"BACK",size:CGSize(width:108,height:36),color:.cyan)
+        back.name = "back"; back.position = CGPoint(x:b.maxX-54,y:b.maxY-16); addChild(back)
+        let height = b.height-62, width = b.width*0.32
+        let preview = armorPanel(size:CGSize(width:width,height:height),color:NeonColors.purple)
+        preview.position = CGPoint(x:b.minX+width/2,y:b.minY+height/2); addChild(preview)
+        menuText("TWIN-STICK CONTROL",on:preview,at:CGPoint(x:0,y:height/2-24),size:10,color:NeonColors.purple,align:.center,width:width-24)
+        for side: CGFloat in [-1,1] {
+            let ring = SKShapeNode(circleOfRadius:min(26,width*0.16))
+            ring.position = CGPoint(x:side*width*0.24,y:14); ring.strokeColor = SKColor.white.withAlphaComponent(0.35)
+            ring.fillColor = NeonColors.background; ring.lineWidth = 2; preview.addChild(ring)
+            let thumb = SKShapeNode(circleOfRadius:8); thumb.fillColor = .cyan; thumb.strokeColor = .white; ring.addChild(thumb)
+            thumb.run(.repeatForever(.sequence([.move(to:CGPoint(x:side*8,y:6),duration:1.2),.move(to:.zero,duration:1.2)])))
+            menuText(side < 0 ? "MOVE" : "AIM / FIRE",on:preview,at:CGPoint(x:side*width*0.24,y:-25),size:8,color:NeonColors.mutedText,align:.center)
         }
-        let hapticsOn = GameSettings.shared.hapticsEnabled
-        let haptics = SKShapeNode(rectOf: CGSize(width: previewWidth - 22, height: 32), cornerRadius: 2)
-        haptics.name = "toggleHaptics"
-        haptics.position = CGPoint(x: 0, y: -size.height * 0.19)
-        haptics.fillColor = hapticsOn ? SKColor.cyan.withAlphaComponent(0.09) : NeonColors.panel
-        haptics.strokeColor = hapticsOn ? .cyan : NeonColors.mutedText.withAlphaComponent(0.35)
-        preview.addChild(haptics)
-        let hapticsTitle = createNeonLabel(text: "HAPTICS", fontSize: 9, color: .white)
-        hapticsTitle.horizontalAlignmentMode = .left
-        hapticsTitle.position = CGPoint(x: -(previewWidth - 22) / 2 + 11, y: 0)
-        haptics.addChild(hapticsTitle)
-        let hapticsState = createNeonLabel(text: hapticsOn ? "ON" : "OFF", fontSize: 9, color: hapticsOn ? NeonColors.green : NeonColors.mutedText)
-        hapticsState.horizontalAlignmentMode = .right
-        hapticsState.position = CGPoint(x: (previewWidth - 22) / 2 - 11, y: 0)
-        haptics.addChild(hapticsState)
-        let contentLeft = 56 + previewWidth
-        let width = max(300, size.width - contentLeft - 34)
-        for (index, mode) in JoystickVisibility.allCases.enumerated() {
+        let on = GameSettings.shared.hapticsEnabled
+        let haptics = armorPanel(size:CGSize(width:width-22,height:42),color:on ? NeonColors.green : NeonColors.mutedText,selected:on)
+        haptics.name = "toggleHaptics"; haptics.position.y = -height/2+33; preview.addChild(haptics)
+        menuText("HAPTICS",on:haptics,at:CGPoint(x:-width/2+23,y:0),size:10)
+        menuText(on ? "ON" : "OFF",on:haptics,at:CGPoint(x:width/2-23,y:0),size:10,color:on ? NeonColors.green : NeonColors.mutedText,align:.right)
+        let listLeft = b.minX+width+12, listWidth = b.width-width-12
+        let modes = JoystickVisibility.allCases
+        let rowHeight = (height-CGFloat(modes.count-1)*10)/CGFloat(modes.count)
+        for (index,mode) in modes.enumerated() {
             let selected = GameSettings.shared.joystickVisibility == mode
-            let card = SKShapeNode(rectOf: CGSize(width: width, height: 62), cornerRadius: 2)
-            card.name = mode.rawValue
-            card.position = CGPoint(x: contentLeft + width / 2, y: size.height - 105 - CGFloat(index) * 72)
-            card.fillColor = selected ? SKColor.cyan.withAlphaComponent(0.10) : NeonColors.panel
-            card.strokeColor = selected ? .cyan : NeonColors.mutedText.withAlphaComponent(0.26)
-            card.lineWidth = selected ? 1.7 : 1
-            card.glowWidth = selected ? 1 : 0
-            addChild(card)
-            let heading = createNeonLabel(text: (selected ? "◆  " : "◇  ") + mode.title.uppercased(), fontSize: 11, color: selected ? .cyan : .white)
-            heading.horizontalAlignmentMode = .left
-            heading.position = CGPoint(x: -width / 2 + 18, y: 10)
-            card.addChild(heading)
-            let detail = createNeonLabel(text: mode.detail, fontSize: 10, color: NeonColors.mutedText)
-            detail.horizontalAlignmentMode = .left
-            detail.position = CGPoint(x: -width / 2 + 18, y: -12)
-            card.addChild(detail)
-            if selected {
-                let active = createNeonLabel(text: "ACTIVE", fontSize: 8, color: NeonColors.green)
-                active.horizontalAlignmentMode = .right
-                active.position = CGPoint(x: width / 2 - 16, y: 0)
-                card.addChild(active)
-            }
+            let card = armorPanel(size:CGSize(width:listWidth,height:rowHeight),color:.cyan,selected:selected)
+            card.name = mode.rawValue; card.position = CGPoint(x:listLeft+listWidth/2,y:b.maxY-62-rowHeight/2-CGFloat(index)*(rowHeight+10)); addChild(card)
+            menuText(mode.title.uppercased(),on:card,at:CGPoint(x:-listWidth/2+16,y:10),size:12,width:listWidth-90)
+            menuText(mode.detail,on:card,at:CGPoint(x:-listWidth/2+16,y:-12),size:9,color:NeonColors.mutedText,width:listWidth-32)
+            menuText(selected ? "ACTIVE" : "SELECT",on:card,at:CGPoint(x:listWidth/2-16,y:10),size:8,color:selected ? NeonColors.green : NeonColors.mutedText,align:.right)
         }
-        let back = NeonButton(title: "BACK", size: CGSize(width: 122, height: 38), color: .cyan)
-        back.name = "back"
-        back.position = CGPoint(x: size.width - 120, y: 43)
-        addChild(back)
     }
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let point = touches.first?.location(in: self) else { return }
-        for node in nodes(at: point) {
-            let name = node.name ?? node.parent?.name ?? ""
-            if name == "back" {
-                let scene = MainMenuScene(size: size); scene.scaleMode = .resizeFill
-                view?.presentScene(scene, transition: .fade(withDuration: 0.2)); return
-            }
+        guard let point = touches.first?.location(in:self) else { return }
+        for name in menuActionNames(at:point,in:self) {
+            if name == "back" { transitionToScene(from:self,to:MainMenuScene(size:size)); return }
             if name == "toggleHaptics" {
                 GameSettings.shared.hapticsEnabled.toggle()
-                if GameSettings.shared.hapticsEnabled {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.55)
-                }
+                if GameSettings.shared.hapticsEnabled { UIImpactFeedbackGenerator(style:.light).impactOccurred(intensity:0.55) }
                 rebuild(); return
             }
-            if let mode = JoystickVisibility(rawValue: name) {
-                GameSettings.shared.joystickVisibility = mode
-                rebuild(); return
-            }
+            if let mode = JoystickVisibility(rawValue:name) { GameSettings.shared.joystickVisibility = mode; rebuild(); return }
         }
     }
 }

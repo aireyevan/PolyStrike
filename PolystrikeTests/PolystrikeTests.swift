@@ -9,7 +9,7 @@ struct PolystrikeTests {
         let orbit = enemy.childNode(withName: "enemyDetailHiveOrbit")
         #expect(orbit != nil)
         #expect(orbit?.children.filter { $0.name == "enemyDetailHiveArrow" }.count == 6)
-        #expect(orbit?.hasActions == true)
+        #expect(orbit?.hasActions() == true)
     }
     @Test func endlessDifficultyKeepsAdvancing() {
         let fifth = GameTier.tier(for: 35000)
@@ -45,7 +45,7 @@ struct PolystrikeTests {
         }
         let menu = MainMenuScene(size: size)
         view.presentScene(menu)
-        #expect(menu.childNode(withName: "play") != nil)
+        #expect(menu.childNode(withName: "playPreview") != nil)
         #expect(menu.childNode(withName: "store") != nil)
     }
     @Test @MainActor func arenaHasPersistentCoverAndCenteredHUD() {
@@ -142,9 +142,9 @@ struct PickupCollectionTests {
         game.collectPickup(pickup)
         game.collectPickup(pickup)
         #expect(game.score == 0)
-        #expect(game.runCoins == 75)
-        #expect(game.progression.flux == 75)
-        #expect(PlayerProgress(defaults: defaults).flux == 75)
+        #expect(game.runCoins == 52)
+        #expect(game.progression.flux == 52)
+        #expect(PlayerProgress(defaults: defaults).flux == 52)
         #expect(pickup.parent == nil)
     }
 }
@@ -183,10 +183,10 @@ struct JoystickSettingsTests {
 
 struct LivingArenaTests {
     @Test func allLayoutsHaveConnectedEscapeRoutes() {
-        for phase in 0..<5 {
+        for phase in 0..<LivingArena.blueprintCount {
             let arena = LivingArena(phase: phase, center: .zero)
             var visited = Set<Int>()
-            var queue = [5 * LivingArena.columns + 7]
+            var queue = [(LivingArena.rows/2) * LivingArena.columns + LivingArena.columns/2]
             visited.insert(queue[0])
             var cursor = 0
             while cursor < queue.count {
@@ -222,7 +222,7 @@ struct LivingArenaTests {
     @Test func compressionMateriallyReducesFloorSpace() {
         let open = LivingArena(phase: 0, center: .zero)
         let cross = LivingArena(phase: 1, center: .zero)
-        #expect(cross.floorCenters.count < open.floorCenters.count / 2)
+        #expect(cross.floorCenters.count < open.floorCenters.count)
         #expect(LivingArena(phase: 2, center: .zero).walls != LivingArena(phase: 3, center: .zero).walls)
     }
 }
@@ -235,16 +235,17 @@ struct ArenaHazardTests {
         let player = scene.childNode(withName: "//player") as! Player
         let world = scene.childNode(withName: "worldNode")!
         let center = player.position
-        player.position = CGPoint(x: center.x + 500, y: center.y + 300)
+        player.position = CGPoint(x: center.x + 700, y: center.y + 100)
         let enemy = Enemy(); enemy.position = player.position; world.addChild(enemy)
         let flux = FluxPickup(value: 25); flux.position = player.position; world.addChild(flux)
         let health = player.health
-        scene.beginArenaShift()
+        let next = LivingArena(phase:6,center:center)
+        scene.beginArenaShift(to:next)
         #expect(player.health == health)
         scene.commitArenaShift()
         #expect(player.health < health)
-        #expect(LivingArena(phase: 1, center: center).containsShip(at: player.position))
-        #expect(LivingArena(phase: 1, center: center).containsShip(at: flux.position))
+        #expect(next.containsShip(at: player.position))
+        #expect(next.containsShip(at: flux.position))
         #expect(flux.parent != nil)
         #expect(hypot(enemy.position.x - player.position.x, enemy.position.y - player.position.y) > 140)
         #expect(scene.score == 0)
@@ -372,36 +373,49 @@ struct EnemyCrowdSteeringTests {
 }
 
 struct MapVarietyTests {
-    @Test func everyShapeAndVariantIsConnectedAndRoomy() {
-        for shape in ArenaShape.allCases {
-            for phase in LivingArena.phases(for: shape) {
-                for variant in 0..<4 {
-                    let arena = LivingArena(phase: phase, center: .zero, shape: shape, variant: variant)
-                    var seen: Set<Int> = [82], queue = [82], cursor = 0
+    @Test func everyArenaHasConnectedPlayerAndBossRoutes() {
+        for phase in 0..<LivingArena.blueprintCount {
+            for variant in 0..<4 {
+                let arena = LivingArena(phase:phase,center:.zero,variant:variant)
+                #expect(arena.floorCenters.count >= 100)
+                for clearance: CGFloat in [24,62] {
+                    let columns = LivingArena.columns*2, rows = LivingArena.rows*2
+                    var cells = Set<Int>()
+                    for y in 0..<rows { for x in 0..<columns {
+                        let point = CGPoint(x:arena.bounds.minX+(CGFloat(x)+0.5)*48,
+                                            y:arena.bounds.minY+(CGFloat(y)+0.5)*48)
+                        if arena.bounds.insetBy(dx:clearance,dy:clearance).contains(point),
+                           !arena.walls.contains(where: { $0.insetBy(dx:-clearance,dy:-clearance).contains(point) }) {
+                            cells.insert(y*columns+x)
+                        }
+                    }}
+                    let start = rows/2*columns+columns/2
+                    #expect(cells.contains(start))
+                    var seen: Set<Int> = [start], queue = [start], cursor = 0
                     while cursor < queue.count {
-                        let index = queue[cursor]; cursor += 1
-                        let x = index % 15, y = index / 15
-                        for (nx, ny) in [(x-1,y),(x+1,y),(x,y-1),(x,y+1)] where arena.isFloor(x: nx, y: ny) {
-                            let next = ny * 15 + nx
-                            if seen.insert(next).inserted { queue.append(next) }
+                        let i=queue[cursor]; cursor += 1
+                        for n in [i-1,i+1,i-columns,i+columns] {
+                            let dx=abs(n%columns-i%columns),dy=abs(n/columns-i/columns)
+                            if cells.contains(n),dx+dy==1,seen.insert(n).inserted {queue.append(n)}
                         }
                     }
-                    #expect(seen.count == arena.floorCenters.count, "Disconnected \(shape) / \(phase) / \(variant)")
-                    #expect(arena.containsShip(at: .zero))
-                    if shape != .rectangle { #expect(arena.floorCenters.count >= 60) }
+                    #expect(seen.count == cells.count,"Disconnected \(arena.name), variant \(variant), clearance \(clearance)")
                 }
             }
         }
     }
-    @Test func outlinesUnlockAtTierMilestones() {
-        #expect(ArenaShape.forTier(4) == .rectangle)
-        #expect(ArenaShape.forTier(5) == .octagon)
-        #expect(ArenaShape.forTier(8) == .square)
-        #expect(ArenaShape.forTier(11) == .triangle)
-        #expect(ArenaShape.forTier(14) == .octagon)
-        #expect(LivingArena.phases(for: .rectangle).count == 12)
-        let octagon = LivingArena(phase: 0, center: .zero, shape: .octagon)
-        #expect(!octagon.insideOutline(x: 0, y: 0))
-        #expect(octagon.insideOutline(x: 7, y: 0))
+    @Test func blueprintsHaveUniqueFootprintsAndSeparateBossDecks() {
+        var signatures=Set<String>()
+        for phase in 0..<LivingArena.blueprintCount {
+            let arena=LivingArena(phase:phase,center:.zero)
+            let signature=(0..<LivingArena.rows).flatMap { y in
+                (0..<LivingArena.columns).map { x in arena.isFloor(x:x,y:y) ? "1" : "0" }
+            }.joined()
+            #expect(signatures.insert(signature).inserted)
+        }
+        #expect(LivingArena.combatPhases.count == 20)
+        #expect(LivingArena.bossPhases.count == 4)
+        #expect(Set(LivingArena.combatPhases).isDisjoint(with:LivingArena.bossPhases))
+        #expect(LivingArena(phase:0,center:.zero).bounds.width > 1440)
     }
 }

@@ -18,9 +18,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private var frameDelta: TimeInterval = 1.0 / 60
-    private var arenaDeck: [Int] = [1]
-    private var deckShape = ArenaShape.rectangle
-    private var activeArena = LivingArena(phase: 0, center: .zero)
+    private var arenaDeck: [Int] = Array(1..<20).shuffled()
+    private var bossArenaDeck: [Int] = LivingArena.bossPhases.shuffled()
+    private(set) var activeArena = LivingArena(phase: 0, center: .zero)
     private var incomingArena: LivingArena?
     private var wavePlan = TierWavePlan.forTier(1)
     private var regularEnemiesRemaining = 0
@@ -396,8 +396,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         activeArena = LivingArena(phase: 0, center: CGPoint(x: playableRect.midX, y: playableRect.midY))
         worldBounds = activeArena.bounds
 
-        createWorldGrid()
-        createArenaBorder()
+        // Arena-specific floor and void artwork is installed with the collision layout.
         // Keep the battlefield clear of decorative foreground geometry.
     }
 
@@ -3708,7 +3707,10 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
                 0.65
             )
 
-        gameOverPanel.lineWidth = 2
+        styleArmor(gameOverPanel,size:CGSize(width:400,height:285),color:NeonColors.pink)
+        let report = createNeonLabel(text:"AFTER ACTION REPORT",fontSize:8,color:NeonColors.mutedText)
+        report.position = CGPoint(x:0,y:118); gameOverPanel.addChild(report)
+        gameOverPanel.lineWidth = 1
         gameOverPanel.zPosition = 901
         gameOverPanel.alpha = 0
 
@@ -3816,9 +3818,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
                 y: -35
             )
 
-        gameOverPanel.addChild(
-            pointsEarnedLabel
-        )
+        if pointsEarnedLabel.frame.width > 360 { pointsEarnedLabel.setScale(360/pointsEarnedLabel.frame.width) }
+        gameOverPanel.addChild(pointsEarnedLabel)
 
         mainMenuButton =
             SKShapeNode(
@@ -3846,7 +3847,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         mainMenuButton.strokeColor =
             cyanColor
 
-        mainMenuButton.lineWidth = 2
+        styleArmor(mainMenuButton,size:CGSize(width:250,height:48),color:.cyan,selected:true)
 
         mainMenuButton.name =
             "mainMenuButton"
@@ -4345,6 +4346,7 @@ private extension GameScene {
         frame.fillColor = NeonColors.panel.withAlphaComponent(0.96)
         frame.strokeColor = SKColor.cyan.withAlphaComponent(0.55)
         frame.lineWidth = 1
+        styleArmor(frame,size:CGSize(width:frameWidth,height:frameHeight),color:.cyan)
         shade.addChild(frame)
 
         let rail = SKShapeNode(rectOf: CGSize(width: frameWidth - 24, height: 1))
@@ -4375,6 +4377,7 @@ private extension GameScene {
             button.fillColor = color.withAlphaComponent(0.065)
             button.strokeColor = color.withAlphaComponent(0.75)
             button.lineWidth = 1
+            styleArmor(button,size:CGSize(width:frameWidth-48,height:46),color:color,selected:name == "pauseResume")
             frame.addChild(button)
             let diamond = SKShapeNode(rectOf: CGSize(width: 7, height: 7))
             diamond.name = name
@@ -5195,36 +5198,13 @@ extension GameScene {
     func installArena(_ layout: LivingArena) {
         barrierNode.removeAllChildren()
         wallRects.removeAll()
-        for rect in layout.walls { addArenaWall(rect, style: layout.phase % 2 + 1) }
-        // Treat adjacent tiles as a continuous mass rather than glowing checkerboard blocks.
+        backgroundNode.removeAllChildren()
+        backgroundNode.addChild(layout.makeBackdrop())
+        for rect in layout.walls { addArenaWall(rect, style: 1) }
+        // Collision tiles are invisible; a single continuous rim defines playable space.
         for wall in barrierNode.children.compactMap({ $0 as? Barrier }) {
-            wall.glowWidth = 0
-            wall.lineWidth = 1
-            wall.fillColor = SKColor(red: 0.035, green: 0.065, blue: 0.10, alpha: 1)
-            wall.strokeColor = SKColor(red: 0.09, green: 0.20, blue: 0.28, alpha: 1)
-            let x = Int((wall.barrierRect.midX - layout.bounds.minX) / LivingArena.tile)
-            let y = Int((wall.barrierRect.midY - layout.bounds.minY) / LivingArena.tile)
-            if !layout.insideOutline(x: x, y: y) {
-                wall.fillColor = backgroundColorDark
-                wall.strokeColor = backgroundColorDark
-            }
+            wall.fillColor = .clear; wall.strokeColor = .clear; wall.glowWidth = 0
         }
-        let edgePath = CGMutablePath()
-        for y in 0..<LivingArena.rows {
-            for x in 0..<LivingArena.columns where !layout.isFloor(x: x, y: y) {
-                let r = layout.rect(x: x, y: y)
-                if layout.isFloor(x: x - 1, y: y) { edgePath.move(to: CGPoint(x: r.minX, y: r.minY)); edgePath.addLine(to: CGPoint(x: r.minX, y: r.maxY)) }
-                if layout.isFloor(x: x + 1, y: y) { edgePath.move(to: CGPoint(x: r.maxX, y: r.minY)); edgePath.addLine(to: CGPoint(x: r.maxX, y: r.maxY)) }
-                if layout.isFloor(x: x, y: y - 1) { edgePath.move(to: CGPoint(x: r.minX, y: r.minY)); edgePath.addLine(to: CGPoint(x: r.maxX, y: r.minY)) }
-                if layout.isFloor(x: x, y: y + 1) { edgePath.move(to: CGPoint(x: r.minX, y: r.maxY)); edgePath.addLine(to: CGPoint(x: r.maxX, y: r.maxY)) }
-            }
-        }
-        let edges = SKShapeNode(path: edgePath)
-        edges.strokeColor = layout.phase % 2 == 0 ? .cyan : NeonColors.purple
-        edges.lineWidth = 2
-        edges.glowWidth = 2
-        edges.zPosition = 3
-        barrierNode.addChild(edges)
     }
 
     func updateLivingArena(deltaTime: TimeInterval) {
@@ -5249,19 +5229,35 @@ extension GameScene {
     }
 
     private func beginArenaShift(forTier tier: Int) {
-        let shape = ArenaShape.forTier(tier)
-        if arenaDeck.isEmpty || deckShape != shape {
-            arenaDeck = LivingArena.phases(for: shape).shuffled()
-            if arenaDeck.first == activeArena.phase { arenaDeck.append(arenaDeck.removeFirst()) }
-            deckShape = shape
+        let phase: Int
+        if TierWavePlan.isFinalBossTier(tier) {
+            if bossArenaDeck.isEmpty {
+                bossArenaDeck = LivingArena.bossPhases.shuffled()
+                if bossArenaDeck.first == activeArena.phase { bossArenaDeck.append(bossArenaDeck.removeFirst()) }
+            }
+            phase = bossArenaDeck.removeFirst()
+        } else {
+            if arenaDeck.isEmpty {
+                arenaDeck = LivingArena.combatPhases.shuffled()
+                if arenaDeck.first == activeArena.phase { arenaDeck.append(arenaDeck.removeFirst()) }
+            }
+            phase = arenaDeck.removeFirst()
         }
-        let next = LivingArena(phase: arenaDeck.removeFirst(), center: activeArena.center, shape: shape, variant: Int.random(in: 0..<4))
+        let next = LivingArena(phase:phase,center:activeArena.center,variant:Int.random(in:0..<4))
+        beginArenaShift(to: next)
+    }
+
+    func beginArenaShift(to next: LivingArena) {
         incomingArena = next
         // Release outgoing walls immediately so the warning period always opens escape routes.
         let retained = activeArena.walls.filter { next.walls.contains($0) }
         barrierNode.removeAllChildren()
         wallRects.removeAll()
         for rect in retained { addArenaWall(rect, style: 1) }
+        for wall in barrierNode.children.compactMap({ $0 as? Barrier }) {
+            wall.fillColor = SKColor(red:0.016,green:0.021,blue:0.031,alpha:1)
+            wall.strokeColor = activeArena.accentColor.withAlphaComponent(0.5)
+        }
         buildNavigation()
         let newWalls = next.walls.filter { !activeArena.walls.contains($0) }
         for rect in newWalls {
@@ -5451,12 +5447,15 @@ private extension GameScene {
         overlay.fillColor = SKColor.black.withAlphaComponent(0.78)
         overlay.strokeColor = .clear
         overlay.zPosition = hudZ + 30
+        let missionFrame = armorPanel(size:CGSize(width:min(520,size.width-100),height:180),color:completion ? NeonColors.green : .cyan)
+        missionFrame.zPosition = 0; overlay.addChild(missionFrame)
         let sector = makeLabel(text: completion ? "SECTOR \(mission.sector)" : String(format: "SECTOR %02d   /   MISSION %02d", mission.sector, mission.number), fontSize: 10, fontName: "AvenirNext-DemiBold", color: NeonColors.mutedText)
         sector.position.y = 42; overlay.addChild(sector)
         let title = makeLabel(text: completion ? "MISSION COMPLETE" : mission.type.title, fontSize: 30, fontName: "AvenirNext-Heavy", color: completion ? NeonColors.green : .cyan)
         title.position.y = 2; overlay.addChild(title)
         let detail = makeLabel(text: completion ? mission.name : mission.description, fontSize: 10, fontName: "AvenirNext-DemiBold", color: .white)
         detail.position.y = -34; overlay.addChild(detail)
+        overlay.children.filter { $0 !== missionFrame }.forEach { $0.zPosition = 1 }
         cameraNode.addChild(overlay)
         if !completion { overlay.run(.sequence([.wait(forDuration: 2.25), .fadeOut(withDuration: 0.3), .removeFromParent()])) }
     }
@@ -5488,27 +5487,14 @@ private extension GameScene {
     }
 
     func installStoryArenaLayout(_ layout: StoryArenaLayout) {
-        let c = activeArena.center
-        let walls: [CGRect]
-        switch layout {
-        case .openGrid: walls = []
-        case .crossfire:
-            walls = [CGRect(x:c.x-210,y:c.y-12,width:95,height:24),CGRect(x:c.x+115,y:c.y-12,width:95,height:24)]
-        case .reactorRing:
-            walls = [CGRect(x:c.x-125,y:c.y-125,width:85,height:18),CGRect(x:c.x+40,y:c.y-125,width:85,height:18),CGRect(x:c.x-125,y:c.y+107,width:85,height:18),CGRect(x:c.x+40,y:c.y+107,width:85,height:18)]
-        case .controlTriangle:
-            walls = [CGRect(x:c.x-22,y:c.y-45,width:44,height:90),CGRect(x:c.x-185,y:c.y+25,width:70,height:18),CGRect(x:c.x+115,y:c.y+25,width:70,height:18)]
-        case .pursuitLanes:
-            walls = [CGRect(x:c.x-230,y:c.y-70,width:170,height:18),CGRect(x:c.x+60,y:c.y+52,width:170,height:18)]
-        case .fortress:
-            walls = [CGRect(x:c.x-175,y:c.y-105,width:115,height:18),CGRect(x:c.x+60,y:c.y-105,width:115,height:18),CGRect(x:c.x-175,y:c.y+87,width:115,height:18),CGRect(x:c.x+60,y:c.y+87,width:115,height:18)]
-        case .bossHex:
-            walls = [CGRect(x:c.x-230,y:c.y-95,width:105,height:18),CGRect(x:c.x+125,y:c.y-95,width:105,height:18),CGRect(x:c.x-230,y:c.y+77,width:105,height:18),CGRect(x:c.x+125,y:c.y+77,width:105,height:18)]
-        case .finalCore:
-            walls = [CGRect(x:c.x-245,y:c.y-10,width:120,height:20),CGRect(x:c.x+125,y:c.y-10,width:120,height:20),CGRect(x:c.x-10,y:c.y-165,width:20,height:85),CGRect(x:c.x-10,y:c.y+80,width:20,height:85)]
-        }
-        for wall in walls where activeArena.bounds.insetBy(dx:30,dy:30).intersects(wall) { addArenaWall(wall,style:2) }
-        if !walls.isEmpty { buildNavigation() }
+        let phases = [0,3,4,20,2,9,18,21,13,15,6,17,22,8,14,12,7,19,16,10,23]
+        let missionID = storyModeManager?.mission.id
+        let index = StoryCampaign.missions.firstIndex { $0.id == missionID } ?? 0
+        activeArena = LivingArena(phase:phases[index],center:activeArena.center,variant:index/5%4)
+        worldBounds = activeArena.bounds
+        installArena(activeArena)
+        if !activeArena.containsShip(at:player.position) { player.position = activeArena.nearestFloor(to:player.position) }
+        buildNavigation()
     }
 
     func storyObjectiveNode(color: SKColor, radius: CGFloat, name: String) -> SKNode {
@@ -5585,10 +5571,15 @@ private extension GameScene {
         guard !storyOutcomeHandled else{return};storyOutcomeHandled=true;gameOver=true;worldNode.isPaused=true
         progression.recordRun(duration:elapsed,enemiesKilled:runEnemiesKilled,tiersCompleted:0,highestTier:storyModeManager?.mission.sector ?? 1,score:score)
         let shade=SKShapeNode(rectOf:size);shade.fillColor=SKColor.black.withAlphaComponent(0.82);shade.strokeColor = .clear;shade.zPosition=900;cameraNode.addChild(shade)
+        let reportFrame=armorPanel(size:CGSize(width:440,height:235),color:NeonColors.pink)
+        reportFrame.zPosition = 0; shade.addChild(reportFrame)
         let title=makeLabel(text:"MISSION FAILED",fontSize:30,fontName:"AvenirNext-Heavy",color:NeonColors.pink);title.position.y=62;shade.addChild(title)
         let detail=makeLabel(text:reason,fontSize:9,fontName:"AvenirNext-DemiBold",color:NeonColors.mutedText);detail.position.y=28;shade.addChild(detail)
         storyRetryButton=SKShapeNode(rectOf:CGSize(width:190,height:44),cornerRadius:2);storyRetryButton!.position=CGPoint(x:-102,y:-35);storyRetryButton!.fillColor=NeonColors.cyan.withAlphaComponent(0.1);storyRetryButton!.strokeColor = .cyan;shade.addChild(storyRetryButton!);storyRetryButton!.addChild(makeLabel(text:"RETRY MISSION",fontSize:11,fontName:"AvenirNext-Bold",color:.white))
+        styleArmor(storyRetryButton!,size:CGSize(width:190,height:44),color:.cyan,selected:true)
         mainMenuButton=SKShapeNode(rectOf:CGSize(width:190,height:44),cornerRadius:2);mainMenuButton.position=CGPoint(x:102,y:-35);mainMenuButton.fillColor=NeonColors.purple.withAlphaComponent(0.1);mainMenuButton.strokeColor=NeonColors.purple;shade.addChild(mainMenuButton);mainMenuButton.addChild(makeLabel(text:"MAIN MENU",fontSize:11,fontName:"AvenirNext-Bold",color:.white))
+        styleArmor(mainMenuButton,size:CGSize(width:190,height:44),color:NeonColors.purple)
+        shade.children.filter { $0 !== reportFrame }.forEach { $0.zPosition = 1 }
     }
 
     func navigationField(to point: CGPoint) -> [Int:Int] {
