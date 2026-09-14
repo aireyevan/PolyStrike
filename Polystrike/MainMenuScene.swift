@@ -670,42 +670,30 @@ final class BarracksScene: SKScene {
 
 
 final class SettingsScene: SKScene {
-    override func didMove(to view: SKView) { rebuild() }
-    override func didChangeSize(_ oldSize: CGSize) { if view != nil { rebuild() } }
+    override func didMove(to view:SKView){rebuild()}
+    override func willMove(from view:SKView){GameAudio.shared.endPreview()}
+    override func didChangeSize(_ oldSize:CGSize){if view != nil {rebuild()}}
     private func rebuild() {
-        removeAllChildren(); createNeonBackground(for:self); addInterfaceAtmosphere(to:self)
-        let b = menuBounds(self)
-        menuHeader("SETTINGS",subtitle:"PILOT INTERFACE / CONTROL CONFIGURATION",on:self,bounds:b,color:NeonColors.purple)
-        let back = NeonButton(title:"BACK",size:CGSize(width:108,height:36),color:.cyan)
-        back.name = "back"; back.position = CGPoint(x:b.maxX-54,y:b.maxY-16); addChild(back)
-        let height = b.height-62, width = b.width*0.32
-        let preview = armorPanel(size:CGSize(width:width,height:height),color:NeonColors.purple)
-        preview.position = CGPoint(x:b.minX+width/2,y:b.minY+height/2); addChild(preview)
-        menuText("TWIN-STICK CONTROL",on:preview,at:CGPoint(x:0,y:height/2-24),size:10,color:NeonColors.purple,align:.center,width:width-24)
-        for side: CGFloat in [-1,1] {
-            let ring = SKShapeNode(circleOfRadius:min(26,width*0.16))
-            ring.position = CGPoint(x:side*width*0.24,y:14); ring.strokeColor = SKColor.white.withAlphaComponent(0.35)
-            ring.fillColor = NeonColors.background; ring.lineWidth = 2; preview.addChild(ring)
-            let thumb = SKShapeNode(circleOfRadius:8); thumb.fillColor = .cyan; thumb.strokeColor = .white; ring.addChild(thumb)
-            thumb.run(.repeatForever(.sequence([.move(to:CGPoint(x:side*8,y:6),duration:1.2),.move(to:.zero,duration:1.2)])))
-            menuText(side < 0 ? "MOVE" : "AIM / FIRE",on:preview,at:CGPoint(x:side*width*0.24,y:-25),size:8,color:NeonColors.mutedText,align:.center)
+        removeAllChildren();createNeonBackground(for:self);addInterfaceAtmosphere(to:self)
+        let b=menuBounds(self)
+        menuHeader("SETTINGS",subtitle:"SOUND MIX / PILOT CONTROLS",on:self,bounds:b,color:NeonColors.purple)
+        let back=NeonButton(title:"BACK",size:CGSize(width:108,height:36),color:.cyan);back.name="back";back.position=CGPoint(x:b.maxX-54,y:b.maxY-16);addChild(back)
+        let height=b.height-62,leftWidth=b.width*0.36,rightWidth=b.width-leftWidth-12
+        let controls=armorPanel(size:CGSize(width:leftWidth,height:height),color:NeonColors.purple);controls.position=CGPoint(x:b.minX+leftWidth/2,y:b.minY+height/2);addChild(controls)
+        menuText("PILOT CONTROLS",on:controls,at:CGPoint(x:0,y:height/2-22),size:10,color:NeonColors.purple,align:.center)
+        let gap:CGFloat=7,rowHeight=min(46,(height-90)/3)
+        for (index,mode) in JoystickVisibility.allCases.enumerated() {
+            let selected=GameSettings.shared.joystickVisibility==mode
+            let card=armorPanel(size:CGSize(width:leftWidth-24,height:rowHeight),color:.cyan,selected:selected);card.name=mode.rawValue;card.position.y=height/2-44-rowHeight/2-CGFloat(index)*(rowHeight+gap);controls.addChild(card)
+            menuText(mode.title.uppercased(),on:card,at:CGPoint(x:-leftWidth/2+23,y:5),size:9,width:leftWidth-42)
+            menuText(selected ? "ACTIVE":"SELECT",on:card,at:CGPoint(x:-leftWidth/2+23,y:-10),size:7,color:selected ? NeonColors.green:NeonColors.mutedText)
         }
-        let on = GameSettings.shared.hapticsEnabled
-        let haptics = armorPanel(size:CGSize(width:width-22,height:42),color:on ? NeonColors.green : NeonColors.mutedText,selected:on)
-        haptics.name = "toggleHaptics"; haptics.position.y = -height/2+33; preview.addChild(haptics)
-        menuText("HAPTICS",on:haptics,at:CGPoint(x:-width/2+23,y:0),size:10)
-        menuText(on ? "ON" : "OFF",on:haptics,at:CGPoint(x:width/2-23,y:0),size:10,color:on ? NeonColors.green : NeonColors.mutedText,align:.right)
-        let listLeft = b.minX+width+12, listWidth = b.width-width-12
-        let modes = JoystickVisibility.allCases
-        let rowHeight = (height-CGFloat(modes.count-1)*10)/CGFloat(modes.count)
-        for (index,mode) in modes.enumerated() {
-            let selected = GameSettings.shared.joystickVisibility == mode
-            let card = armorPanel(size:CGSize(width:listWidth,height:rowHeight),color:.cyan,selected:selected)
-            card.name = mode.rawValue; card.position = CGPoint(x:listLeft+listWidth/2,y:b.maxY-62-rowHeight/2-CGFloat(index)*(rowHeight+10)); addChild(card)
-            menuText(mode.title.uppercased(),on:card,at:CGPoint(x:-listWidth/2+16,y:10),size:12,width:listWidth-90)
-            menuText(mode.detail,on:card,at:CGPoint(x:-listWidth/2+16,y:-12),size:9,color:NeonColors.mutedText,width:listWidth-32)
-            menuText(selected ? "ACTIVE" : "SELECT",on:card,at:CGPoint(x:listWidth/2-16,y:10),size:8,color:selected ? NeonColors.green : NeonColors.mutedText,align:.right)
-        }
+        let on=GameSettings.shared.hapticsEnabled
+        let haptics=NeonButton(title:"HAPTICS  /  \(on ? "ON":"OFF")",size:CGSize(width:leftWidth-24,height:32),color:on ? NeonColors.green:NeonColors.mutedText);haptics.name="toggleHaptics";haptics.position.y = -height/2+23;controls.addChild(haptics)
+        let audio=armorPanel(size:CGSize(width:rightWidth,height:height),color:.cyan);audio.position=CGPoint(x:b.minX+leftWidth+12+rightWidth/2,y:b.minY+height/2);addChild(audio)
+        menuText("COMBAT AUDIO",on:audio,at:CGPoint(x:0,y:height/2-22),size:11,color:.cyan,align:.center)
+        let mixer=AudioSettingsPanel(size:CGSize(width:rightWidth-24,height:height-58));mixer.position.y = -9;audio.addChild(mixer)
+        menuText("DRAG TO MIX • RELEASE TO PREVIEW • SAVED AUTOMATICALLY",on:audio,at:CGPoint(x:0,y:-height/2+10),size:7,color:NeonColors.mutedText,align:.center,width:rightWidth-24)
     }
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard let point = touches.first?.location(in:self) else { return }

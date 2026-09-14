@@ -229,6 +229,14 @@ final class GameSettings {
     static let shared = GameSettings()
     private let defaults: UserDefaults
     init(defaults: UserDefaults = .standard) { self.defaults = defaults }
+    func volume(_ channel:AudioChannel)->Float {
+        guard let number=defaults.object(forKey:"audio.\(channel.rawValue)") as? NSNumber else{return channel.defaultVolume}
+        let value=number.floatValue
+        return value.isFinite ? max(0,min(1,value)):channel.defaultVolume
+    }
+    func setVolume(_ value:Float,for channel:AudioChannel) {
+        defaults.set(value.isFinite ? max(0,min(1,value)):0,forKey:"audio.\(channel.rawValue)")
+    }
     var joystickVisibility: JoystickVisibility {
         get { JoystickVisibility(rawValue: defaults.string(forKey: "joystickVisibility") ?? "") ?? .fade }
         set { defaults.set(newValue.rawValue, forKey: "joystickVisibility") }

@@ -208,8 +208,13 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // MARK: - Scene Setup
 
+    override func willMove(from view:SKView) {
+        GameAudio.shared.stop()
+        NotificationCenter.default.removeObserver(self,name:UIApplication.willResignActiveNotification,object:nil)
+    }
     override func didMove(to view: SKView) {
         super.didMove(to: view)
+        GameAudio.shared.beginRun()
 
         backgroundColor = backgroundColorDark
 
@@ -1010,6 +1015,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             deltaTime: deltaTime
         )
         bossManager.update(deltaTime)
+        GameAudio.shared.setBossActive(bossManager.isActive)
 
         updateShooting(
             currentTime: currentTime
@@ -1479,6 +1485,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         showsMuzzleFlash: Bool = true
     ) {
 
+        GameAudio.shared.play(.weapon)
         let bullet = Bullet(damage: player.damage, color: player.projectileColor)
 
         bullet.bulletSpeed =
@@ -2170,6 +2177,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         let releasesSwarm = enemy.userData?["bossKind"] as? String == "carrier"
         let releasesOctagons = enemy.userData?["splitsIntoOctagons"] as? Bool == true
 
+        if enemy.userData?["managedBoss"] as? Bool == true {GameAudio.shared.play(.bossExplosion)}
         let managedBossDefeated = bossManager.defeated(enemy)
         enemy.removeAllActions()
         enemy.removeFromParent()
@@ -2245,6 +2253,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private func createHitFlash(
         at position: CGPoint
     ) {
+        GameAudio.shared.play(.impact)
 
         let flash = SKShapeNode(
             circleOfRadius: 8
@@ -2290,6 +2299,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         if elapsed-explosionWindow >= 0.1 { explosionWindow=elapsed;explosionsInWindow=0 }
         guard explosionsInWindow < 4 else { return }
         explosionsInWindow += 1
+        GameAudio.shared.play(.explosion)
         let outerRing =
             SKShapeNode(
                 circleOfRadius: 9
@@ -2512,6 +2522,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Player Damage
 
     private func createPlayerDamageEffect() {
+        GameAudio.shared.play(.damage)
 
         player.removeAction(
             forKey: "damageFlash"
@@ -2706,6 +2717,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func advanceTierAfterClear() {
+        GameAudio.shared.play(.complete)
         runTiersCompleted += 1
         let newTier = GameTier.tier(number: currentTier.number + 1)
         currentTier = newTier
@@ -3651,6 +3663,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             return
         }
 
+        GameAudio.shared.pause();GameAudio.shared.play(.defeat,preview:true)
         gameOver = true
         progression.recordRun(duration: elapsed,
                               enemiesKilled: runEnemiesKilled,
@@ -3974,6 +3987,8 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
             let tappedNames = cameraNode.nodes(at: location).compactMap { $0.name ?? $0.parent?.name }
             if pausedRun {
+                if tappedNames.contains("pauseSettings") { showPauseAudioSettings() }
+                if tappedNames.contains("pauseAudioBack") { pausePanel?.removeFromParent();pausePanel=nil;pausedRun=false;pauseRun() }
                 if tappedNames.contains("pauseResume") { resumeRun() }
                 if tappedNames.contains("pauseMainMenu") { returnToMainMenu() }
                 continue
@@ -4343,9 +4358,11 @@ private extension GameScene {
         }
     }
     @objc func applicationInterrupted() { if !gameOver { pauseRun() } }
-    func pauseRun() {
+    internal func pauseRun() {
         guard !pausedRun else { return }
         pausedRun = true
+        speed=0
+        GameAudio.shared.pause()
         worldNode.isPaused = true
         movementTouch = nil; aimingTouch = nil
         moveJoystick.end(); aimJoystick.end()
@@ -4386,13 +4403,13 @@ private extension GameScene {
         frame.addChild(title)
 
         func addPauseButton(_ title: String, name: String, y: CGFloat, color: SKColor) {
-            let button = SKShapeNode(rectOf: CGSize(width: frameWidth - 48, height: 46), cornerRadius: 2)
+            let button = SKShapeNode(rectOf: CGSize(width: frameWidth - 48, height: 40), cornerRadius: 2)
             button.name = name
             button.position.y = y
             button.fillColor = color.withAlphaComponent(0.065)
             button.strokeColor = color.withAlphaComponent(0.75)
             button.lineWidth = 1
-            styleArmor(button,size:CGSize(width:frameWidth-48,height:46),color:color,selected:name == "pauseResume")
+            styleArmor(button,size:CGSize(width:frameWidth-48,height:40),color:color,selected:name == "pauseResume")
             frame.addChild(button)
             let diamond = SKShapeNode(rectOf: CGSize(width: 7, height: 7))
             diamond.name = name
@@ -4407,8 +4424,9 @@ private extension GameScene {
             text.position = CGPoint(x: -frameWidth / 2 + 60, y: -4)
             button.addChild(text)
         }
-        addPauseButton("RESUME RUN", name: "pauseResume", y: 8, color: .cyan)
-        addPauseButton("RETURN TO MAIN MENU", name: "pauseMainMenu", y: -52, color: NeonColors.purple)
+        addPauseButton("RESUME RUN", name: "pauseResume", y: 28, color: .cyan)
+        addPauseButton("AUDIO SETTINGS", name: "pauseSettings", y: -24, color: NeonColors.orange)
+        addPauseButton("RETURN TO MAIN MENU", name: "pauseMainMenu", y: -76, color: NeonColors.purple)
 
         let footer = makeLabel(text: "RETURNING TO MENU ENDS THE CURRENT RUN", fontSize: 7, fontName: "AvenirNext-DemiBold", color: NeonColors.mutedText)
         footer.position.y = -frameHeight / 2 + 17
@@ -4416,11 +4434,24 @@ private extension GameScene {
         cameraNode.addChild(shade)
         pausePanel = shade
     }
-    func resumeRun() {
+    internal func showPauseAudioSettings() {
+        pausePanel?.removeFromParent()
+        let shade=SKShapeNode(rectOf:size);shade.fillColor=SKColor.black.withAlphaComponent(0.9);shade.strokeColor = .clear;shade.zPosition=850
+        let width=min(size.width-80,560),height=min(size.height-50,300)
+        let frame=armorPanel(size:CGSize(width:width,height:height),color:.cyan);shade.addChild(frame)
+        menuText("AUDIO SETTINGS",on:frame,at:CGPoint(x:-width/2+22,y:height/2-28),size:16,color:.cyan,width:width-155)
+        let back=NeonButton(title:"BACK",size:CGSize(width:92,height:30),color:NeonColors.purple);back.name="pauseAudioBack";back.position=CGPoint(x:width/2-62,y:height/2-25);frame.addChild(back)
+        let mixer=AudioSettingsPanel(size:CGSize(width:width-44,height:height-77));mixer.position.y = -12;frame.addChild(mixer)
+        menuText("RELEASE TO PREVIEW • SAVED AUTOMATICALLY • RUN REMAINS PAUSED",on:frame,at:CGPoint(x:0,y:-height/2+14),size:7,color:NeonColors.mutedText,align:.center,width:width-32)
+        cameraNode.addChild(shade);pausePanel=shade
+    }
+    internal func resumeRun() {
+        speed=1
+        GameAudio.shared.resume()
         pausedRun = false
         moveJoystick.refreshVisibility()
         aimJoystick.refreshVisibility()
-        worldNode.isPaused = false
+        worldNode.isPaused = storyModeManager?.phase == .checkpoint
         pausePanel?.removeFromParent()
         pausePanel = nil
         gameTime = 0
@@ -4504,6 +4535,7 @@ private extension GameScene {
     }
 
     func fireEnemyProjectile(from enemy: Enemy, angleOffset: CGFloat = 0) {
+        GameAudio.shared.play(.enemyWeapon)
         guard !gameOver else { return }
         let angle = atan2(player.position.y - enemy.position.y, player.position.x - enemy.position.x) + angleOffset
         let direction = CGVector(dx: cos(angle), dy: sin(angle))
@@ -4878,6 +4910,7 @@ extension GameScene {
         pickup.removeFromParent()
         let grossReward = pickup.value + pickup.value * progression.level(.salvage) / 50
         let reward = max(1, Int((Double(grossReward) * 0.70).rounded(.down)))
+        GameAudio.shared.play(.pickup)
         runCoins += reward
         progression.addPoints(reward)
         coinLabel.text = "\(runCoins)"
@@ -5356,6 +5389,7 @@ extension GameScene {
         dashUntil = elapsed + 0.35
         let input = moveJoystick.direction
         let direction = hypot(input.dx, input.dy) > 0.1 ? normalize(input) : CGVector(dx: cos(player.zRotation), dy: sin(player.zRotation))
+        GameAudio.shared.play(.dash)
         let dashStart = player.position
         for _ in 0..<9 {
             let candidate = CGPoint(x: player.position.x + direction.dx * 18, y: player.position.y + direction.dy * 18)
@@ -5369,6 +5403,7 @@ extension GameScene {
     func activateBomb() {
         if let manager=storyModeManager,manager.phase != .active {return}
         guard !gameOver, !pausedRun, progression.level(.bomb) > 0, elapsed >= bombReadyAt else { return }
+        GameAudio.shared.play(.shockwave)
         bombReadyAt = elapsed + progression.bombCooldown
         let radius: CGFloat = 180 + CGFloat(progression.level(.bomb)) * 5
         let wave = CombatEffects.shockwave(radius:radius,color:player.projectileColor)
@@ -5538,6 +5573,7 @@ private extension GameScene {
     func updateStoryMode(deltaTime:TimeInterval) {
         guard let manager=storyModeManager else{return}
         if manager.phase == .checkpoint && !storyStageChanging {
+            GameAudio.shared.play(.complete)
             storyStageChanging=true;worldNode.isPaused=true
             let label=makeLabel(text:"CHECKPOINT SECURED • REPAIR +25% • NEXT STAGE IN 3",fontSize:11,fontName:"AvenirNext-Heavy",color:NeonColors.green);label.name="storyCheckpointBanner";label.position.y=0;label.zPosition=hudZ+20;cameraNode.addChild(label)
             run(.sequence([.wait(forDuration:2.6),.run{[weak self,weak label] in
@@ -5561,7 +5597,9 @@ private extension GameScene {
                     guard let relay=node as? StoryObjectiveNode else{continue}
                     let contested=enemies.contains{hypot($0.position.x-relay.position.x,$0.position.y-relay.position.y)<90}
                     let close=hypot(player.position.x-relay.position.x,player.position.y-relay.position.y)<68
+                    let before=manager.captureProgress[index]
                     if close {manager.holdCaptureZone(index,delta:deltaTime,contested:contested)}
+                    if before<1 && manager.captureProgress[index]>=1 {GameAudio.shared.play(.complete)}
                     let progress=manager.captureProgress[index]
                     relay.render(progress:progress,state:progress>=1 ? "LINK SECURED":contested ? "CONTESTED":close ? "UPLOADING \(Int(progress*100))%":"HOLD TO LINK",contested:contested && progress<1)
                 }
@@ -5589,6 +5627,7 @@ private extension GameScene {
 
     func createStoryArtillery() {
         guard let manager=storyModeManager,manager.phase == .active else{return}
+        GameAudio.shared.play(.warning)
         let stageIndex=manager.stageIndex,point=player.position
         let warning=SKShapeNode(circleOfRadius:65);warning.name="storyArtillery";warning.position=point;warning.lineWidth=2;warning.strokeColor=NeonColors.orange;warning.fillColor=NeonColors.orange.withAlphaComponent(0.13);warning.zPosition=3
         let cross=SKShapeNode(rectOf:CGSize(width:100,height:2));cross.fillColor=NeonColors.orange;cross.strokeColor = .clear;warning.addChild(cross)
@@ -5618,6 +5657,7 @@ private extension GameScene {
 
     func finishStoryMission() {
         guard let manager=storyModeManager else{return};storyOutcomeHandled=true;gameOver=true;worldNode.isPaused=true
+        GameAudio.shared.pause();GameAudio.shared.play(.complete,preview:true)
         for pickup in worldNode.children.compactMap({$0 as? FluxPickup}) {collectPickup(pickup)}
         let result=manager.recordVictory(healthRatio:player.health/max(1,player.maxHealth));progression.addPoints(result.reward)
         progression.recordRun(duration:elapsed,enemiesKilled:runEnemiesKilled,tiersCompleted:manager.mission.stages.count,highestTier:manager.mission.sector,score:score)
@@ -5640,6 +5680,7 @@ private extension GameScene {
 
     func showStoryFailure(reason:String) {
         guard !storyOutcomeHandled else{return};storyOutcomeHandled=true;gameOver=true;worldNode.isPaused=true
+        GameAudio.shared.pause();GameAudio.shared.play(.defeat,preview:true)
         progression.recordRun(duration:elapsed,enemiesKilled:runEnemiesKilled,tiersCompleted:0,highestTier:storyModeManager?.mission.sector ?? 1,score:score)
         let shade=SKShapeNode(rectOf:size);shade.fillColor=SKColor.black.withAlphaComponent(0.82);shade.strokeColor = .clear;shade.zPosition=900;cameraNode.addChild(shade)
         let reportFrame=armorPanel(size:CGSize(width:440,height:235),color:NeonColors.pink)
@@ -5727,6 +5768,7 @@ private extension GameScene {
     }
 
     func fireBossProjectile(from position: CGPoint, angle: CGFloat, speed: CGFloat, damage: CGFloat, color: SKColor) {
+        GameAudio.shared.play(.enemyWeapon)
         let shot = SKShapeNode(path: {
             let path=CGMutablePath();path.move(to:CGPoint(x:8,y:0));path.addLine(to:CGPoint(x:-5,y:5));path.addLine(to:CGPoint(x:-2,y:0));path.addLine(to:CGPoint(x:-5,y:-5));path.closeSubpath();return path
         }())

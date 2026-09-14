@@ -1,3 +1,4 @@
+import AVFoundation
 import Testing
 import UIKit
 import SpriteKit
@@ -645,6 +646,74 @@ struct HomeMovieTests {
         view.presentScene(scene)
         #expect(scene.childNode(withName:"//infiniteArenaMovie") is SKVideoNode)
         #expect(scene.childNode(withName:"playPreview") != nil)
+        view.presentScene(nil)
+    }
+}
+
+struct AudioSettingsTests {
+    @Test @MainActor func denseCombatAudioAdmissionDoesNotBlockGameplay() {
+        let audio=GameAudio.shared
+        audio.beginRun()
+        let start=ProcessInfo.processInfo.systemUptime
+        for _ in 0..<10_000 {
+            audio.play(.weapon);audio.play(.impact);audio.play(.explosion)
+        }
+        let elapsed=ProcessInfo.processInfo.systemUptime-start
+        audio.stop()
+        print("Audio burst: 30,000 events admitted/throttled in \(elapsed) seconds")
+        // A deliberately generous budget for debug builds on shared simulator hosts.
+        #expect(elapsed<0.5)
+        #expect(!audio.running)
+    }
+
+    @Test func volumesPersistClampAndMuteIndependently() {
+        let suite="Audio.\(UUID().uuidString)"
+        let d=UserDefaults(suiteName:suite)!
+        defer{d.removePersistentDomain(forName:suite)}
+        let settings=GameSettings(defaults:d)
+        #expect(settings.volume(.music)==0.6)
+        settings.setVolume(0,for:.music);settings.setVolume(0.35,for:.weapons);settings.setVolume(2,for:.effects)
+        let loaded=GameSettings(defaults:d)
+        #expect(loaded.volume(.music)==0);#expect(loaded.volume(.weapons)==0.35);#expect(loaded.volume(.effects)==1)
+        loaded.setVolume(-1,for:.effects);#expect(loaded.volume(.effects)==0)
+        loaded.setVolume(.nan,for:.weapons);#expect(loaded.volume(.weapons)==0)
+    }
+    @Test func sliderMappingHasExactMuteAndFullVolumeEndpoints() {
+        #expect(AudioSliderNode.normalized(x:-300,width:200)==0)
+        #expect(AudioSliderNode.normalized(x:-100,width:200)==0)
+        #expect(AudioSliderNode.normalized(x:0,width:200)==0.5)
+        #expect(AudioSliderNode.normalized(x:100,width:200)==1)
+        #expect(AudioSliderNode.normalized(x:300,width:200)==1)
+    }
+    @Test func allAudioFilesDecodeAndHaveExpectedDurations() throws {
+        for sound in GameSound.allCases {
+            let url=try #require(GameAudio.url(sound.rawValue,extension:"wav"))
+            let file=try AVAudioFile(forReading:url)
+            #expect(file.length>1000)
+            #expect(file.processingFormat.channelCount==1)
+            #expect(file.processingFormat.sampleRate==44100)
+        }
+        for name in ["GridPulse","CoreOverdrive"] {
+            let player=try AVAudioPlayer(contentsOf:#require(GameAudio.url(name,extension:"m4a")))
+            #expect(player.duration>50 && player.duration<65)
+        }
+        #expect(GameSound.weapon.channel == .weapons)
+        #expect(GameSound.explosion.channel == .effects)
+    }
+    @Test @MainActor func pauseSettingsKeepWorldStoppedAndExposeThreeSliders() {
+        let view=SKView(frame:CGRect(x:0,y:0,width:667,height:375)),game=GameScene(size:CGSize(width:667,height:375))
+        view.presentScene(game);game.pauseRun();game.showPauseAudioSettings()
+        #expect(game.childNode(withName:"worldNode")?.isPaused == true)
+        #expect(game.speed==0)
+        for channel in AudioChannel.allCases {#expect(game.childNode(withName:"//volume_\(channel.rawValue)") is AudioSliderNode)}
+        game.resumeRun();#expect(game.speed==1);#expect(game.childNode(withName:"worldNode")?.isPaused == false)
+        view.presentScene(nil)
+        #expect(!GameAudio.shared.running)
+    }
+    @Test @MainActor func homeSettingsContainThreeAudioControls() {
+        let view=SKView(frame:CGRect(x:0,y:0,width:667,height:375)),scene=SettingsScene(size:CGSize(width:667,height:375))
+        view.presentScene(scene)
+        for channel in AudioChannel.allCases {#expect(scene.childNode(withName:"//volume_\(channel.rawValue)") is AudioSliderNode)}
         view.presentScene(nil)
     }
 }
