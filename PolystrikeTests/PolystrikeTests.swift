@@ -717,3 +717,70 @@ struct AudioSettingsTests {
         view.presentScene(nil)
     }
 }
+
+struct MenuEconomyRevisionTests {
+    @Test func lateUpgradesEscalateAndSalvageIsBounded() {
+        #expect(PlayerProgress.upgradePrice(base:500,level:0)==500)
+        for level in 1..<60 {
+            #expect(PlayerProgress.upgradePrice(base:500,level:level)>PlayerProgress.upgradePrice(base:500,level:level-1))
+        }
+        #expect(PlayerProgress.upgradePrice(base:500,level:40)>20*PlayerProgress.upgradePrice(base:500,level:5))
+        #expect(PlayerProgress.salvageReward(base:1000,level:20)==840)
+        #expect(PlayerProgress.salvageReward(base:1000,level:200)==840)
+        #expect(PlayerProgress.salvageReward(base:0,level:20)==0)
+        #expect(PlayerProgress.fluxDrop(tier:1000,elite:false)==24)
+        #expect(PlayerProgress.fluxDrop(tier:1000,elite:true)==2250)
+    }
+    @Test @MainActor func browsingShipsCannotSpendAndConfirmationChargesExactlyOnce() {
+        let suite="ShipReview.\(UUID().uuidString)";let d=UserDefaults(suiteName:suite)!
+        defer {d.removePersistentDomain(forName:suite)}
+        let progress=PlayerProgress(defaults:d);progress.addPoints(300_000)
+        let store=StoreScene(size:CGSize(width:852,height:393));store.progress=progress
+        let view=SKView(frame:CGRect(x:0,y:0,width:852,height:393));view.presentScene(store)
+        store.handleAction("tab3");store.handleAction("ship1")
+        #expect(progress.flux==300_000);#expect(!progress.owns(.viper))
+        #expect(store.childNode(withName:"purchaseReview") != nil)
+        store.handleAction("cancelPurchase");#expect(progress.flux==300_000)
+        store.handleAction("ship1");store.handleAction("confirmPurchase")
+        #expect(progress.owns(.viper));#expect(progress.flux==50_000)
+        store.handleAction("confirmPurchase");#expect(progress.flux==50_000)
+        view.presentScene(nil)
+    }
+    @Test @MainActor func upgradeReviewCancelAndInsufficientFundsNeverSpend() {
+        let suite="UpgradeReview.\(UUID().uuidString)";let d=UserDefaults(suiteName:suite)!
+        defer {d.removePersistentDomain(forName:suite)}
+        let progress=PlayerProgress(defaults:d);progress.addPoints(600)
+        let store=StoreScene(size:CGSize(width:852,height:393));store.progress=progress
+        let view=SKView(frame:CGRect(x:0,y:0,width:852,height:393));view.presentScene(store)
+        store.handleAction("upgrade0");store.handleAction("cancelPurchase")
+        #expect(progress.fireRateLevel==0);#expect(progress.flux==600)
+        store.handleAction("upgrade0");store.handleAction("confirmPurchase")
+        #expect(progress.fireRateLevel==1);#expect(progress.flux==100)
+        store.handleAction("upgrade0");store.handleAction("confirmPurchase")
+        #expect(progress.fireRateLevel==1);#expect(progress.flux==100)
+        view.presentScene(nil)
+    }
+    @Test @MainActor func resultScreenHidesAbilitiesAndRestoresPreviousVisibility() {
+        let suite="ResultHUD.\(UUID().uuidString)";let d=UserDefaults(suiteName:suite)!
+        defer {d.removePersistentDomain(forName:suite)}
+        d.set(1,forKey:"shipUpgrade.bomb");d.set(1,forKey:"shipUpgrade.dash")
+        let game=GameScene(size:CGSize(width:852,height:393));game.progression=PlayerProgress(defaults:d)
+        let view=SKView(frame:CGRect(x:0,y:0,width:852,height:393));view.presentScene(game)
+        let bomb=game.childNode(withName:"//bombAbility"),dash=game.childNode(withName:"//dashAbility")
+        #expect(bomb != nil);#expect(dash != nil)
+        dash?.isHidden=true
+        game.setCombatUIHidden(true);game.setCombatUIHidden(true)
+        #expect(bomb?.isHidden==true);#expect(dash?.isHidden==true)
+        game.setCombatUIHidden(false)
+        #expect(bomb?.isHidden==false);#expect(dash?.isHidden==true)
+        view.presentScene(nil)
+    }
+    @Test @MainActor func homeShowsCareerProgressAndArmoryShowsUpgradeProgress() {
+        let view=SKView(frame:CGRect(x:0,y:0,width:852,height:393)),home=MainMenuScene(size:CGSize(width:852,height:393))
+        view.presentScene(home);#expect(home.childNode(withName:"careerXPProgress") != nil)
+        let store=StoreScene(size:home.size);view.presentScene(store)
+        #expect(store.childNode(withName:"upgradeProgress0") != nil)
+        #expect(store.childNode(withName:"menuHeading") is AngularTitleNode)
+        view.presentScene(nil)
+    }
+}

@@ -37,7 +37,11 @@ final class MainMenuScene: SKScene {
         let emblem = RankEmblemNode(level:level,size:38)
         emblem.position = CGPoint(x:bounds.maxX-20,y:bounds.maxY-17); addChild(emblem)
         label("LEVEL \(level)",x:bounds.maxX-48,y:bounds.maxY-10,size:10,color:.white,alignment:.right)
-        label("COMBAT RECORD",x:bounds.maxX-48,y:bounds.maxY-26,size:7,color:NeonColors.mutedText,alignment:.right)
+        let progress=PlayerProgress.shared
+        let text=level>=1000 ? "MAX RANK" : "\(Int(progress.rankProgress*100))% • \(progress.xpForNextLevel-progress.xpIntoLevel) XP TO LV \(level+1)"
+        menuText(text,on:self,at:CGPoint(x:bounds.maxX-48,y:bounds.maxY-25),size:7,color:NeonColors.mutedText,align:.right,width:145)
+        let xp=menuProgressBar(width:145,ratio:progress.rankProgress,color:.cyan)
+        xp.name="careerXPProgress";xp.position=CGPoint(x:bounds.maxX-193,y:bounds.maxY-37);addChild(xp)
         let gap: CGFloat = 12
         let footerHeight: CGFloat = 46
         let heroHeight = max(100,bounds.height-126)
@@ -45,15 +49,14 @@ final class MainMenuScene: SKScene {
         let heroY = bounds.maxY-60-heroHeight/2
         buildArenaDisplay(at:CGPoint(x:bounds.minX+heroWidth/2,y:heroY),frameSize:CGSize(width:heroWidth,height:heroHeight))
         buildStoryPreview(at:CGPoint(x:bounds.maxX-heroWidth/2,y:heroY),frameSize:CGSize(width:heroWidth,height:heroHeight))
-        let titles = ["ARMORY", "BARRACKS", "SETTINGS", "LEADERBOARDS"]
+        let titles = ["ARMORY", "BARRACKS", "SETTINGS", "LEADERBOARD"]
         let names = ["store", "barracks", "settings", "leaderboards"]
-        let colors: [SKColor] = [NeonColors.orange,.cyan,NeonColors.purple,NeonColors.mutedText]
+        let colors: [SKColor] = [NeonColors.orange,.cyan,NeonColors.purple,.cyan]
         let width = (bounds.width-gap*3)/4
         for index in 0..<4 {
             let button = NeonButton(title:titles[index],size:CGSize(width:width,height:footerHeight),color:colors[index])
             button.name = names[index]
             button.position = CGPoint(x:bounds.minX+width/2+CGFloat(index)*(width+gap),y:bounds.minY+footerHeight/2+9)
-            if index == 3 { button.alpha = 0.42; button.titleLabel.text = "LEADERBOARDS - SOON" }
             addChild(button)
         }
     }
@@ -274,11 +277,12 @@ final class MainMenuScene: SKScene {
             return
         }
         for name in menuActionNames(at: point, in: self) {
-            if name == "store" || name == "barracks" || name == "settings" {
+            if name == "store" || name == "barracks" || name == "settings" || name == "leaderboards" {
                 let scene: SKScene
                 switch name {
                 case "store": scene = StoreScene(size: size)
                 case "barracks": scene = BarracksScene(size: size)
+                case "leaderboards": scene = LeaderboardScene(size: size)
                 default: scene = SettingsScene(size: size)
                 }
                 scene.scaleMode = .resizeFill

@@ -196,23 +196,23 @@ class PlayerProgress {
     // MARK: - Upgrade Costs
     
     func fireRateCost() -> Int {
-        return 500 + (fireRateLevel * 350) + max(0, fireRateLevel - 20) * max(0, fireRateLevel - 20) * 35
+        return Self.upgradePrice(base: 500, level: fireRateLevel)
     }
     
     func healthCost() -> Int {
-        return 750 + (healthLevel * 400) + max(0, healthLevel - 20) * max(0, healthLevel - 20) * 35
+        return Self.upgradePrice(base: 750, level: healthLevel)
     }
     
     func damageCost() -> Int {
-        return 1000 + (damageLevel * 500) + max(0, damageLevel - 20) * max(0, damageLevel - 20) * 35
+        return Self.upgradePrice(base: 1000, level: damageLevel)
     }
     
     func speedCost() -> Int {
-        return 750 + (speedLevel * 400) + max(0, speedLevel - 20) * max(0, speedLevel - 20) * 35
+        return Self.upgradePrice(base: 750, level: speedLevel)
     }
     
     func doubleShotCost() -> Int {
-        return 50000
+        return 150_000
     }
     
     
@@ -452,7 +452,7 @@ enum ShipUpgrade: String, CaseIterable {
         case .armor: return "\(level * 2)% resistance"
         case .repair: return String(format: "%.2f HP/s", Double(level) * 0.25)
         case .magnet: return "\(110 + level * 8) range"
-        case .salvage: return "+\(level * 2)% Flux"
+        case .salvage: return "+\(min(20, max(0, level)))% Flux"
         case .bomb: return level == 0 ? "Locked" : "\(80 + level * 20) dmg / \(Int(max(12, 32 - Double(level) * 0.8)))s"
         case .dash: return level == 0 ? "Locked" : String(format: "%.1fs recharge", max(2.5, 9 - Double(level) * 0.3))
         }
@@ -460,6 +460,20 @@ enum ShipUpgrade: String, CaseIterable {
 }
 
 extension PlayerProgress {
+    /// Late levels grow polynomially instead of staying close to their entry price.
+    static func upgradePrice(base:Int, level:Int, specialty:Bool=false)->Int {
+        let l=Double(max(0,min(60,level)))
+        let factor=specialty ? 1 + 0.8*l + 0.35*l*l + 0.045*l*l*l : 1 + 0.65*l + 0.16*l*l + 0.012*l*l*l
+        return Int((Double(base)*factor/50).rounded(.up))*50
+    }
+    static func salvageReward(base:Int,level:Int)->Int {
+        guard base>0 else{return 0}
+        return max(1,Int((Double(base)*0.70*(1+Double(min(20,max(0,level)))/100)).rounded(.down)))
+    }
+    static func fluxDrop(tier:Int,elite:Bool)->Int {
+        elite ? 250 + min(50,max(1,tier))*40 : 12 + min(12,max(0,tier-1)/3)
+    }
+    var rankProgress:CGFloat {rankLevel>=1000 ? 1 : CGFloat(xpIntoLevel)/CGFloat(max(1,xpForNextLevel))}
     func level(_ upgrade: ShipUpgrade) -> Int {
         switch upgrade {
         case .fire: return fireRateLevel
@@ -479,11 +493,11 @@ extension PlayerProgress {
         case .health: return healthCost()
         case .speed: return speedCost()
         case .doubleShot: return doubleShotCost()
-        case .tripleShot: return 600_000
-        case .quadShot: return 4_000_000
+        case .tripleShot: return 1_200_000
+        case .quadShot: return 6_000_000
         default:
             let l = level(upgrade)
-            return (upgrade == .dash ? 1500 : 1200) + l * 700 + l * l * 50
+            return Self.upgradePrice(base: upgrade == .salvage ? 6_000 : (upgrade == .dash ? 1_500 : 1_200), level: l, specialty: true)
         }
     }
     @discardableResult func buy(_ upgrade: ShipUpgrade) -> Bool {
@@ -494,11 +508,11 @@ extension PlayerProgress {
         case .speed: return buySpeed()
         case .doubleShot: return buyDoubleShot()
         case .tripleShot:
-            guard doubleShotUnlocked, !tripleShotUnlocked, points >= 600_000 else { return false }
-            points -= 600_000; tripleShotUnlocked = true; save(); return true
+            guard doubleShotUnlocked, !tripleShotUnlocked, points >= cost(.tripleShot) else { return false }
+            points -= cost(.tripleShot); tripleShotUnlocked = true; save(); return true
         case .quadShot:
-            guard tripleShotUnlocked, !quadShotUnlocked, points >= 4_000_000 else { return false }
-            points -= 4_000_000; quadShotUnlocked = true; save(); return true
+            guard tripleShotUnlocked, !quadShotUnlocked, points >= cost(.quadShot) else { return false }
+            points -= cost(.quadShot); quadShotUnlocked = true; save(); return true
         default:
             let l = level(upgrade), price = cost(upgrade)
             guard l < upgrade.cap, points >= price else { return false }

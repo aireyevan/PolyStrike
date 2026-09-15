@@ -89,6 +89,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private var gameOver = false
     private var isTransitioning = false
+    private var infiniteRunFinalized = false
 
     // MARK: - Joystick Visibility
 
@@ -158,10 +159,25 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
     private var finalScoreLabel: SKLabelNode!
     private var pointsEarnedLabel: SKLabelNode!
 
+    private var reviveButton: SKShapeNode?
+    private var reviveLabel: SKLabelNode?
+    private var reviveStatusLabel: SKLabelNode?
+
     private var mainMenuButton: SKShapeNode!
     private var mainMenuLabel: SKLabelNode!
 
     private var tierAnnouncementNode: SKNode?
+    private var hiddenCombatUI:[(SKNode,Bool)]=[]
+    func setCombatUIHidden(_ hidden:Bool) {
+        if hidden {
+            guard hiddenCombatUI.isEmpty else{return}
+            hiddenCombatUI=cameraNode.children.map {($0,$0.isHidden)}
+            hiddenCombatUI.forEach {$0.0.isHidden=true}
+        } else {
+            hiddenCombatUI.forEach {$0.0.isHidden=$0.1}
+            hiddenCombatUI.removeAll()
+        }
+    }
 
     // MARK: - Z Positions
 
@@ -1590,95 +1606,18 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // MARK: - Muzzle Flash
 
-    private func createMuzzleFlash(
-        direction: CGVector
-    ) {
-
-        let flash = SKShapeNode(
-            circleOfRadius: 7
-        )
-
-        flash.fillColor = .white
-        flash.strokeColor = cyanColor
-        flash.lineWidth = 1
-
-        flash.position = CGPoint(
-            x: player.position.x +
-                direction.dx * 28,
-
-            y: player.position.y +
-                direction.dy * 28
-        )
-
-        flash.zPosition = effectZ
-
-        worldNode.addChild(
-            flash
-        )
-
-        let scale = SKAction.scale(
-            to: 2.2,
-            duration: 0.07
-        )
-
-        let fade = SKAction.fadeOut(
-            withDuration: 0.07
-        )
-
-        flash.run(
-            SKAction.sequence([
-                SKAction.group([
-                    scale,
-                    fade
-                ]),
-                SKAction.removeFromParent()
-            ])
-        )
-
-        let beamPath = CGMutablePath()
-
-        beamPath.move(
-            to: CGPoint(
-                x: player.position.x +
-                    direction.dx * 20,
-
-                y: player.position.y +
-                    direction.dy * 20
-            )
-        )
-
-        beamPath.addLine(
-            to: CGPoint(
-                x: player.position.x +
-                    direction.dx * 48,
-
-                y: player.position.y +
-                    direction.dy * 48
-            )
-        )
-
-        let beam = SKShapeNode(
-            path: beamPath
-        )
-
-        beam.strokeColor =
-            cyanColor.withAlphaComponent(0.7)
-
-        beam.lineWidth = 2
-        beam.zPosition = effectZ - 1
-
-        worldNode.addChild(
-            beam
-        )
-
-        beam.run(
-            SKAction.sequence([
-                SKAction.fadeOut(
-                    withDuration: 0.06
-                ),
-                SKAction.removeFromParent()
-            ])
-        )
+    private func createMuzzleFlash(direction:CGVector) {
+        let flash=SKSpriteNode(texture:CombatPickupArt.flare)
+        flash.name="muzzleFlare";flash.size=CGSize(width:48,height:30)
+        flash.color=player.projectileColor;flash.colorBlendFactor=0.55;flash.blendMode = .add
+        flash.position=CGPoint(x:player.position.x+direction.dx*32,y:player.position.y+direction.dy*32)
+        flash.zRotation=atan2(direction.dy,direction.dx);flash.zPosition=effectZ
+        worldNode.addChild(flash)
+        flash.run(.sequence([
+            .group([.scaleX(to:1.35,duration:0.045),.scaleY(to:0.65,duration:0.045)]),
+            .group([.scaleX(to:1.6,duration:0.055),.scaleY(to:0.15,duration:0.055),.fadeOut(withDuration:0.055)]),
+            .removeFromParent()
+        ]))
     }
 
     // MARK: - Spawning
@@ -2201,7 +2140,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         animateScoreChange()
 
         let isSentinel = enemy.userData?["sentinel"] as? Bool == true
-        let fluxValue = isSentinel ? 400 + currentTier.number * 100 : max(15, earnedScore / 4)
+        let fluxValue = PlayerProgress.fluxDrop(tier:currentTier.number,elite:isSentinel || managedBossDefeated)
         if isSentinel {
             createBossFluxBurst(at: position, value: fluxValue)
         } else {
@@ -3665,12 +3604,6 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
         GameAudio.shared.pause();GameAudio.shared.play(.defeat,preview:true)
         gameOver = true
-        progression.recordRun(duration: elapsed,
-                              enemiesKilled: runEnemiesKilled,
-                              tiersCompleted: runTiersCompleted,
-                              highestTier: currentTier.number,
-                              score: score)
-        UserDefaults.standard.set(max(score, UserDefaults.standard.integer(forKey: "polystrikeBestScore")), forKey: "polystrikeBestScore")
         worldNode.isPaused = true
 
         moveJoystick.end()
@@ -3681,6 +3614,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
 
         updateHUD()
 
+        setCombatUIHidden(true)
         createGameOverScreen()
     }
 
@@ -3717,7 +3651,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             SKShapeNode(
                 rectOf: CGSize(
                     width: 400,
-                    height: 285
+                    height: 350
                 ),
                 cornerRadius: 18
             )
@@ -3741,9 +3675,9 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
                 0.65
             )
 
-        styleArmor(gameOverPanel,size:CGSize(width:400,height:285),color:NeonColors.pink)
-        let report = createNeonLabel(text:"AFTER ACTION REPORT",fontSize:8,color:NeonColors.mutedText)
-        report.position = CGPoint(x:0,y:118); gameOverPanel.addChild(report)
+        styleArmor(gameOverPanel,size:CGSize(width:400,height:350),color:NeonColors.pink)
+        let report = createNeonLabel(text:"SYSTEM FAILURE • RECOVERY AVAILABLE",fontSize:8,color:NeonColors.mutedText)
+        report.position = CGPoint(x:0,y:150); gameOverPanel.addChild(report)
         gameOverPanel.lineWidth = 1
         gameOverPanel.zPosition = 901
         gameOverPanel.alpha = 0
@@ -3767,7 +3701,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         gameOverLabel.position =
             CGPoint(
                 x: 0,
-                y: 78
+                y: 108
             )
 
         gameOverPanel.addChild(
@@ -3792,7 +3726,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         divider.position =
             CGPoint(
                 x: 0,
-                y: 50
+                y: 78
             )
 
         gameOverPanel.addChild(
@@ -3813,7 +3747,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         scoreTitle.position =
             CGPoint(
                 x: 0,
-                y: 26
+                y: 54
             )
 
         gameOverPanel.addChild(
@@ -3831,7 +3765,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         finalScoreLabel.position =
             CGPoint(
                 x: 0,
-                y: -4
+                y: 23
             )
 
         gameOverPanel.addChild(
@@ -3849,11 +3783,39 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         pointsEarnedLabel.position =
             CGPoint(
                 x: 0,
-                y: -35
+                y: -8
             )
 
         if pointsEarnedLabel.frame.width > 360 { pointsEarnedLabel.setScale(360/pointsEarnedLabel.frame.width) }
         gameOverPanel.addChild(pointsEarnedLabel)
+
+        reviveButton = SKShapeNode(rectOf: CGSize(width: 280, height: 50), cornerRadius: 10)
+        reviveButton?.position = CGPoint(x: 0, y: -65)
+        reviveButton?.fillColor = SKColor(red: 0.04, green: 0.18, blue: 0.16, alpha: 1)
+        reviveButton?.strokeColor = .yellow
+        reviveButton?.name = "rewardedReviveButton"
+        if let reviveButton {
+            styleArmor(reviveButton, size: CGSize(width: 280, height: 50), color: .yellow, selected: true)
+            gameOverPanel.addChild(reviveButton)
+        }
+
+        reviveLabel = makeLabel(
+            text: RewardedReviveAd.shared.isReady ? "WATCH AD • RESTORE FULL HEALTH" : "LOADING RECOVERY SIGNAL…",
+            fontSize: 12,
+            fontName: "AvenirNext-Bold",
+            color: RewardedReviveAd.shared.isReady ? .yellow : NeonColors.mutedText
+        )
+        reviveLabel?.name = "rewardedReviveButton"
+        reviveButton?.addChild(reviveLabel!)
+
+        reviveStatusLabel = makeLabel(text: "REVIVE HERE • RUN CONTINUES", fontSize: 8, fontName: "AvenirNext-DemiBold", color: NeonColors.mutedText)
+        reviveStatusLabel?.position = CGPoint(x: 0, y: -99)
+        if let reviveStatusLabel { gameOverPanel.addChild(reviveStatusLabel) }
+
+        RewardedReviveAd.shared.loadIfNeeded { [weak self] ready in
+            guard let self, self.gameOver else { return }
+            self.setReviveButton(ready: ready)
+        }
 
         mainMenuButton =
             SKShapeNode(
@@ -3867,7 +3829,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         mainMenuButton.position =
             CGPoint(
                 x: 0,
-                y: -91
+                y: -137
             )
 
         mainMenuButton.fillColor =
@@ -3925,7 +3887,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
                     ),
 
                     SKAction.scale(
-                        to: 1.0,
+                        to: min(1, min(menuBounds(self).width / 400, menuBounds(self).height / 350)),
                         duration: 0.25
                     )
                 ])
@@ -4121,6 +4083,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         */
 
         let cameraLocation = location
+        let panelLocation = gameOverPanel?.convert(cameraLocation, from: cameraNode) ?? cameraLocation
 
         if let retry = storyRetryButton, retry.contains(cameraLocation), let manager = storyModeManager {
             if manager.phase == .complete {
@@ -4132,9 +4095,77 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
             return
         }
 
-        if mainMenuButton.contains(cameraLocation) {
+        if let reviveButton, reviveButton.contains(panelLocation) {
+            presentRewardedRevive()
+            return
+        }
+
+        if mainMenuButton.contains(panelLocation) {
             if storyModeManager != nil {returnToStoryOperations()} else {returnToMainMenu()}
         }
+    }
+
+    private func setReviveButton(ready: Bool, message: String? = nil) {
+        reviveLabel?.text = message ?? (ready ? "WATCH AD • RESTORE FULL HEALTH" : "AD UNAVAILABLE • TAP TO RETRY")
+        reviveLabel?.fontColor = ready ? .yellow : NeonColors.mutedText
+        reviveButton?.alpha = ready ? 1 : 0.72
+    }
+
+    private func presentRewardedRevive() {
+        guard gameOver, let viewController = view?.window?.rootViewController else { return }
+        setReviveButton(ready: false, message: "OPENING RECOVERY CHANNEL…")
+        RewardedReviveAd.shared.present(from: viewController) { [weak self] result in
+            guard let self, self.gameOver else { return }
+            switch result {
+            case .earnedReward:
+                self.reviveAtDeathLocation()
+            case .dismissed:
+                self.setReviveButton(ready: false, message: "AD NOT COMPLETED • TAP TO RETRY")
+                RewardedReviveAd.shared.loadIfNeeded { [weak self] ready in
+                    guard let self, self.gameOver else { return }
+                    self.setReviveButton(ready: ready)
+                }
+            case .failed(let message):
+                self.setReviveButton(ready: false, message: message)
+                RewardedReviveAd.shared.loadIfNeeded { [weak self] ready in
+                    guard let self, self.gameOver else { return }
+                    self.setReviveButton(ready: ready)
+                }
+            }
+        }
+    }
+
+    private func reviveAtDeathLocation() {
+        player.health = player.maxHealth
+        invincibleUntil = elapsed + 2.0
+        lastDamageTime = gameTime
+        gameOverOverlay?.removeFromParent()
+        gameOverPanel?.removeFromParent()
+        gameOverOverlay = nil
+        gameOverPanel = nil
+        reviveButton = nil
+        reviveLabel = nil
+        reviveStatusLabel = nil
+        mainMenuButton = nil
+        mainMenuLabel = nil
+        gameOver = false
+        setCombatUIHidden(false)
+        worldNode.isPaused = false
+        GameAudio.shared.resume()
+        updateHUD()
+        createEnemySpawnEffect(at: player.position)
+    }
+
+    private func finalizeInfiniteRun() {
+        guard storyModeManager == nil, gameOver, !infiniteRunFinalized else { return }
+        infiniteRunFinalized = true
+        progression.recordRun(duration: elapsed,
+                              enemiesKilled: runEnemiesKilled,
+                              tiersCompleted: runTiersCompleted,
+                              highestTier: currentTier.number,
+                              score: score)
+        UserDefaults.standard.set(max(score, UserDefaults.standard.integer(forKey: "polystrikeBestScore")), forKey: "polystrikeBestScore")
+        GameCenterManager.shared.submitScore(score)
     }
 
     private func returnToMainMenu() {
@@ -4144,6 +4175,7 @@ final class GameScene: SKScene, SKPhysicsContactDelegate {
         }
 
         isTransitioning = true
+        finalizeInfiniteRun()
 
         mainMenuButton?.removeAction(forKey: "buttonPulse")
 
@@ -4842,63 +4874,24 @@ final class FluxPickup: SKNode {
         name = "fluxPickup"
         zPosition = 12
 
-        func diamondPath(width: CGFloat, height: CGFloat) -> CGPath {
-            let path = CGMutablePath()
-            path.move(to: CGPoint(x: 0, y: height / 2))
-            path.addLine(to: CGPoint(x: width / 2, y: 0))
-            path.addLine(to: CGPoint(x: 0, y: -height / 2))
-            path.addLine(to: CGPoint(x: -width / 2, y: 0))
-            path.closeSubpath()
-            return path
-        }
-
-        let halo = SKShapeNode(path: diamondPath(width: 15, height: 18))
-        halo.fillColor = NeonColors.green.withAlphaComponent(0.045)
-        halo.strokeColor = NeonColors.green.withAlphaComponent(0.24)
-        halo.lineWidth = 0.7
-        halo.glowWidth = 3
-        addChild(halo)
-
-        let outer = SKShapeNode(path: diamondPath(width: 10, height: 14))
-        outer.fillColor = NeonColors.green.withAlphaComponent(0.13)
-        outer.strokeColor = NeonColors.green
-        outer.lineWidth = 1.3
-        outer.glowWidth = 4
-        addChild(outer)
-
-        let inner = SKShapeNode(path: diamondPath(width: 5, height: 8))
-        inner.fillColor = .white
-        inner.strokeColor = NeonColors.green
-        inner.lineWidth = 1
-        inner.glowWidth = 5
-        addChild(inner)
-
-        let orbit = SKNode()
-        orbit.name = "fluxOrbit"
-        for index in 0..<4 {
-            let glint = SKShapeNode(path: diamondPath(width: 1.8, height: 2.6))
-            glint.zRotation = .pi / 4
-            glint.fillColor = index.isMultiple(of: 2) ? .white : NeonColors.green
-            glint.strokeColor = .clear
-            let angle = CGFloat(index) * .pi / 2
-            glint.position = CGPoint(x: cos(angle) * 7.5, y: sin(angle) * 8.5)
-            orbit.addChild(glint)
-        }
-        addChild(orbit)
-
-        outer.run(.repeatForever(.sequence([
-            .rotate(toAngle: 0.08, duration: 0.8),
-            .rotate(toAngle: -0.08, duration: 0.8)
-        ])))
-        orbit.run(.repeatForever(.rotate(byAngle: -.pi * 2, duration: 2.1)))
-        inner.run(.repeatForever(.sequence([
-            .group([.scale(to: 1.22, duration: 0.55), .fadeAlpha(to: 0.72, duration: 0.55)]),
-            .group([.scale(to: 0.88, duration: 0.55), .fadeAlpha(to: 1, duration: 0.55)])
-        ])))
-        halo.run(.repeatForever(.sequence([
-            .group([.scale(to: 1.22, duration: 0.8), .fadeAlpha(to: 0.35, duration: 0.8)]),
-            .group([.scale(to: 0.9, duration: 0.8), .fadeAlpha(to: 0.9, duration: 0.8)])
-        ])))
+        let gem=SKSpriteNode(texture:CombatPickupArt.gem)
+        gem.name="fluxGem";gem.size=CGSize(width:14,height:16.8)
+        addChild(gem)
+        // Animate the art only: attraction, collection radius and reward remain unchanged.
+        let phase=Double.random(in:0...1.6)
+        gem.run(.sequence([.wait(forDuration:phase),.repeatForever(.sequence([
+            .group([.moveBy(x:0,y:2,duration:0.8),.rotate(toAngle:0.07,duration:0.8),.scaleX(to:0.86,duration:0.8)]),
+            .group([.moveBy(x:0,y:-2,duration:0.8),.rotate(toAngle:-0.07,duration:0.8),.scaleX(to:1,duration:0.8)])
+        ]))]))
+        let glint=SKSpriteNode(texture:CombatPickupArt.glint)
+        glint.name="fluxGlint";glint.size=CGSize(width:5,height:5)
+        glint.position=CGPoint(x:-1.5,y:4);glint.blendMode = .add;glint.alpha=0
+        gem.addChild(glint)
+        glint.run(.sequence([.wait(forDuration:phase),.repeatForever(.sequence([
+            .group([.fadeIn(withDuration:0.18),.scale(to:1,duration:0.18),.rotate(byAngle:0.4,duration:0.18)]),
+            .group([.fadeOut(withDuration:0.3),.scale(to:0.35,duration:0.3)]),
+            .wait(forDuration:1.5)
+        ]))]))
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 }
@@ -4908,8 +4901,7 @@ extension GameScene {
     func collectPickup(_ pickup: FluxPickup) {
         guard pickup.parent != nil else { return }
         pickup.removeFromParent()
-        let grossReward = pickup.value + pickup.value * progression.level(.salvage) / 50
-        let reward = max(1, Int((Double(grossReward) * 0.70).rounded(.down)))
+        let reward = PlayerProgress.salvageReward(base:pickup.value,level:progression.level(.salvage))
         GameAudio.shared.play(.pickup)
         runCoins += reward
         progression.addPoints(reward)
@@ -5656,7 +5648,7 @@ private extension GameScene {
     }
 
     func finishStoryMission() {
-        guard let manager=storyModeManager else{return};storyOutcomeHandled=true;gameOver=true;worldNode.isPaused=true
+        guard let manager=storyModeManager else{return};storyOutcomeHandled=true;gameOver=true;worldNode.isPaused=true;setCombatUIHidden(true)
         GameAudio.shared.pause();GameAudio.shared.play(.complete,preview:true)
         for pickup in worldNode.children.compactMap({$0 as? FluxPickup}) {collectPickup(pickup)}
         let result=manager.recordVictory(healthRatio:player.health/max(1,player.maxHealth));progression.addPoints(result.reward)
@@ -5679,7 +5671,7 @@ private extension GameScene {
     }
 
     func showStoryFailure(reason:String) {
-        guard !storyOutcomeHandled else{return};storyOutcomeHandled=true;gameOver=true;worldNode.isPaused=true
+        guard !storyOutcomeHandled else{return};storyOutcomeHandled=true;gameOver=true;worldNode.isPaused=true;setCombatUIHidden(true)
         GameAudio.shared.pause();GameAudio.shared.play(.defeat,preview:true)
         progression.recordRun(duration:elapsed,enemiesKilled:runEnemiesKilled,tiersCompleted:0,highestTier:storyModeManager?.mission.sector ?? 1,score:score)
         let shade=SKShapeNode(rectOf:size);shade.fillColor=SKColor.black.withAlphaComponent(0.82);shade.strokeColor = .clear;shade.zPosition=900;cameraNode.addChild(shade)

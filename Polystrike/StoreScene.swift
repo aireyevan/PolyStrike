@@ -1,16 +1,19 @@
 import SpriteKit
 
 final class StoreScene: SKScene {
+    var progress=PlayerProgress.shared
+    private(set) var pendingShip:ShipStyle?
+    private(set) var pendingUpgrade:ShipUpgrade?
     private var category = 0
     private var previewShip = PlayerProgress.shared.selectedShip
-    private var notice = "PERMANENT UPGRADES • TAP A CARD TO INSTALL"
+    private var notice = "SELECT A SYSTEM • REVIEW THE NEXT UPGRADE"
     private let groups: [[ShipUpgrade]] = [[.fire,.damage,.doubleShot,.tripleShot,.quadShot,.bomb],[.health,.armor,.repair,.dash],[.speed,.magnet,.salvage]]
     override func didMove(to view: SKView) { rebuild() }
-    override func didChangeSize(_ oldSize: CGSize) { if view != nil { rebuild() } }
+    override func didChangeSize(_ oldSize: CGSize) { if view != nil { rebuild();if pendingShip != nil || pendingUpgrade != nil {review(ship:pendingShip,upgrade:pendingUpgrade)} } }
 
     private func rebuild() {
         removeAllChildren(); createNeonBackground(for:self); addInterfaceAtmosphere(to:self)
-        let b = menuBounds(self), progress = PlayerProgress.shared
+        let b = menuBounds(self), progress = self.progress
         menuHeader(category == 3 ? "SHIP VAULT" : "ARMORY",subtitle:"BUILD YOUR EDGE / PERMANENT UPGRADES",on:self,bounds:b,color:NeonColors.orange)
         let wallet = armorPanel(size:CGSize(width:175,height:36),color:NeonColors.green)
         wallet.position = CGPoint(x:b.maxX-87.5,y:b.maxY-16); addChild(wallet)
@@ -46,12 +49,12 @@ final class StoreScene: SKScene {
             let center = CGPoint(x:rightX+cardWidth/2+CGFloat(index%2)*(cardWidth+gap),y:gridTop-cardHeight/2-CGFloat(index/2)*(cardHeight+gap))
             if category == 3 {
                 let frame = ShipStyle.allCases[index], owned = progress.owns(frame)
-                let card = armorPanel(size:CGSize(width:cardWidth,height:cardHeight),color:shipColor(frame),selected:progress.selectedShip == frame)
+                let card = armorPanel(size:CGSize(width:cardWidth,height:cardHeight),color:shipColor(frame),selected:previewShip == frame)
                 card.name = "ship\(index)"; card.position = center; addChild(card)
                 let miniature = Player(style:frame); miniature.physicsBody = nil; miniature.setScale(0.6)
                 miniature.position.x = -cardWidth/2+24; card.addChild(miniature)
                 menuText(frame.title,on:card,at:CGPoint(x:-cardWidth/2+47,y:10),size:9,width:cardWidth-57)
-                let status = progress.selectedShip == frame ? "EQUIPPED" : (owned ? "TAP TO EQUIP" : "◈ \(formatted(frame.price))")
+                let status = progress.selectedShip == frame ? "EQUIPPED" : (owned ? "REVIEW / EQUIP" : "VIEW • ◈ \(formatted(frame.price))")
                 menuText(status,on:card,at:CGPoint(x:-cardWidth/2+47,y:-10),size:8,color:owned ? NeonColors.green : NeonColors.mutedText,width:cardWidth-57)
             } else {
                 let upgrade = groups[category][index], level = progress.level(upgrade), maxed = level >= upgrade.cap
@@ -65,8 +68,13 @@ final class StoreScene: SKScene {
                 let needsTriple = upgrade == .quadShot && !progress.tripleShotUnlocked
                 let effect = needsDouble ? "Requires Double Shot" : (needsTriple ? "Requires Triple Shot" : upgrade.effect(at:maxed ? level : level+1))
                 menuText(effect,on:card,at:CGPoint(x:left,y:0),size:8,color:NeonColors.mutedText,width:cardWidth-24)
-                menuText(maxed ? "INSTALLED" : "◈ \(formatted(progress.cost(upgrade)))",on:card,at:CGPoint(x:left,y:-cardHeight/2+13),size:9,color:maxed ? NeonColors.green : (available ? .white : NeonColors.mutedText),width:cardWidth-24)
+                menuText(maxed ? "INSTALLED" : "◈ \(formatted(progress.cost(upgrade)))",on:card,at:CGPoint(x:left,y:-cardHeight/2+17),size:9,color:maxed ? NeonColors.green : (available ? .white : NeonColors.mutedText),width:cardWidth-24)
             }
+                if category != 3 {
+                    let upgrade=groups[category][index]
+                    let bar=menuProgressBar(width:cardWidth-24,ratio:CGFloat(progress.level(upgrade))/CGFloat(upgrade.cap),color:NeonColors.orange,height:3)
+                    bar.name="upgradeProgress\(index)";bar.position=CGPoint(x:center.x-cardWidth/2+12,y:center.y-cardHeight/2+6);addChild(bar)
+                }
         }
         menuText(notice,on:self,at:CGPoint(x:rightX,y:b.minY+10),size:8,color:NeonColors.mutedText,width:rightWidth)
     }
@@ -74,43 +82,73 @@ final class StoreScene: SKScene {
     private func shipColor(_ style: ShipStyle) -> SKColor {
         switch style { case .striker:return .cyan; case .viper:return NeonColors.green; case .spectre:return NeonColors.purple; case .nova:return NeonColors.orange; case .eclipse:return NeonColors.pink; case .sovereign:return .white }
     }
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let point = touches.first?.location(in: self) else { return }
-        for name in menuActionNames(at:point,in:self) {
-            if name == "back" {
-                let scene = MainMenuScene(size: size); scene.scaleMode = .resizeFill
-                view?.presentScene(scene, transition: .fade(withDuration: 0.2)); return
-            }
-            if name.hasPrefix("tab"), let index = Int(name.dropFirst(3)), (0..<4).contains(index) {
-                category = index
-                if index == 3 { previewShip = PlayerProgress.shared.selectedShip; notice = "SELECT A FRAME • OWNED SHIPS EQUIP INSTANTLY" }
-                else { notice = index == 1 ? "REPAIR STARTS AFTER 4s UNHARMED • DASH GRANTS BRIEF INVULNERABILITY" : "PERMANENT UPGRADES • TAP A CARD TO INSTALL" }
-                rebuild(); return
-            }
-            if category == 3, name.hasPrefix("ship"), let index = Int(name.dropFirst(4)), ShipStyle.allCases.indices.contains(index) {
-                let style = ShipStyle.allCases[index]
-                previewShip = style
-                let progress = PlayerProgress.shared
-                if progress.owns(style) {
-                    _ = progress.selectShip(style)
-                    notice = "\(style.title) EQUIPPED"
-                } else if progress.buyShip(style) {
-                    notice = "\(style.title) UNLOCKED + EQUIPPED"
-                } else {
-                    notice = "NEED \(formatted(style.price - progress.flux)) MORE FLUX"
+    override func touchesEnded(_ touches:Set<UITouch>,with event:UIEvent?) {
+        guard let point=touches.first?.location(in:self) else{return}
+        let modal=childNode(withName:"purchaseReview")
+        for name in menuActionNames(at:modal?.convert(point,from:self) ?? point,in:modal ?? self) {
+            if handleAction(name) {return}
+        }
+    }
+    @discardableResult func handleAction(_ name:String)->Bool {
+        if pendingShip != nil || pendingUpgrade != nil {
+            if name=="cancelPurchase" {pendingShip=nil;pendingUpgrade=nil;childNode(withName:"purchaseReview")?.removeFromParent();return true}
+            if name=="confirmPurchase" {
+                if let ship=pendingShip {
+                    let success=progress.owns(ship) ? progress.selectShip(ship) : progress.buyShip(ship)
+                    notice=success ? "\(ship.title) EQUIPPED" : "NOT ENOUGH FLUX • PURCHASE CANCELLED"
+                } else if let upgrade=pendingUpgrade {
+                    notice=progress.buy(upgrade) ? "\(upgrade.title) INSTALLED" : "UPGRADE UNAVAILABLE • NO FLUX SPENT"
                 }
-                rebuild(); return
+                pendingShip=nil;pendingUpgrade=nil;rebuild();return true
             }
-            if category < groups.count, name.hasPrefix("upgrade"), let index = Int(name.dropFirst(7)), groups[category].indices.contains(index) {
-                let upgrade = groups[category][index]
-                let progress = PlayerProgress.shared
-                if progress.level(upgrade) >= upgrade.cap { notice = "SYSTEM FULLY UPGRADED" }
-                else if upgrade == .tripleShot && !progress.doubleShotUnlocked { notice = "DOUBLE SHOT REQUIRED FIRST" }
-                else if upgrade == .quadShot && !progress.tripleShotUnlocked { notice = "TRIPLE SHOT REQUIRED FIRST" }
-                else if progress.buy(upgrade) { notice = "\(upgrade.title) INSTALLED" + ([ShipUpgrade.dash, .bomb].contains(upgrade) ? " • TAP ITS BUTTON DURING A RUN" : "") }
-                else { notice = "NEED \(formatted(progress.cost(upgrade) - progress.flux)) MORE FLUX" }
-                rebuild(); return
-            }
+            return false
+        }
+        if name=="back" {let scene=MainMenuScene(size:size);scene.scaleMode = .resizeFill;view?.presentScene(scene,transition:.fade(withDuration:0.2));return true}
+        if name.hasPrefix("tab"),let index=Int(name.dropFirst(3)),(0..<4).contains(index) {
+            category=index;notice=index==3 ? "SELECT A FRAME • REVIEW BEFORE PURCHASING" : "SELECT A SYSTEM • REVIEW THE NEXT UPGRADE";rebuild();return true
+        }
+        if category==3,name.hasPrefix("ship"),let index=Int(name.dropFirst(4)),ShipStyle.allCases.indices.contains(index) {
+            previewShip=ShipStyle.allCases[index];rebuild();review(ship:previewShip);return true
+        }
+        if category<groups.count,name.hasPrefix("upgrade"),let index=Int(name.dropFirst(7)),groups[category].indices.contains(index) {
+            let upgrade=groups[category][index]
+            if progress.level(upgrade)>=upgrade.cap {notice="SYSTEM FULLY UPGRADED";rebuild()}
+            else if upgrade == .tripleShot && !progress.doubleShotUnlocked {notice="INSTALL DOUBLE SHOT FIRST";rebuild()}
+            else if upgrade == .quadShot && !progress.tripleShotUnlocked {notice="INSTALL TRIPLE SHOT FIRST";rebuild()}
+            else {review(upgrade:upgrade)}
+            return true
+        }
+        return false
+    }
+    func review(ship:ShipStyle?=nil,upgrade:ShipUpgrade?=nil) {
+        pendingShip=ship;pendingUpgrade=upgrade
+        childNode(withName:"purchaseReview")?.removeFromParent()
+        let b=menuBounds(self),w=min(430,b.width),h=min(292,b.height)
+        let shade=SKShapeNode(rectOf:size);shade.fillColor=SKColor.black.withAlphaComponent(0.92);shade.strokeColor = .clear
+        shade.name="purchaseReview";shade.position=CGPoint(x:size.width/2,y:size.height/2);shade.zPosition=1000;addChild(shade)
+        let panel=armorPanel(size:CGSize(width:w,height:h),color:NeonColors.orange,selected:true);shade.addChild(panel)
+        let owned=ship.map {progress.owns($0)} ?? false
+        let price=ship.map {owned ? 0:$0.price} ?? upgrade.map {progress.cost($0)} ?? 0
+        let title=ship?.title ?? upgrade?.title ?? "REVIEW"
+        menuText(title,on:panel,at:CGPoint(x:0,y:h/2-24),size:16,align:.center,width:w-32)
+        if let ship {
+            let art=Player(style:ship);art.physicsBody=nil;art.position.y=h*0.13;art.setScale(min(1.3,h/210));panel.addChild(art)
+            menuText(ship.subtitle,on:panel,at:CGPoint(x:0,y:-h*0.08),size:9,color:NeonColors.mutedText,align:.center,width:w-30)
+        } else if let upgrade {
+            let level=progress.level(upgrade)
+            menuText("LEVEL \(level) → \(level+1) / \(upgrade.cap)",on:panel,at:CGPoint(x:0,y:h*0.2),size:12,align:.center)
+            menuText("NOW  \(upgrade.effect(at:level))",on:panel,at:CGPoint(x:0,y:h*0.09),size:10,color:NeonColors.mutedText,align:.center)
+            menuText("NEXT  \(upgrade.effect(at:level+1))",on:panel,at:CGPoint(x:0,y:-h*0.02),size:11,color:NeonColors.green,align:.center)
+            let bar=menuProgressBar(width:w-48,ratio:CGFloat(level)/CGFloat(upgrade.cap),color:NeonColors.orange)
+            bar.position=CGPoint(x:-w/2+24,y:-h*0.1);panel.addChild(bar)
+        }
+        let affordable=progress.flux>=price
+        menuText(price==0 ? "OWNED • EQUIP THIS FRAME" : "COST  ◈ \(formatted(price)) FLUX",on:panel,at:CGPoint(x:0,y:-h*0.22),size:12,color:affordable ? .white:NeonColors.orange,align:.center,width:w-32)
+        menuText(affordable ? "BALANCE AFTER: \(formatted(progress.flux-price)) FLUX" : "NEED \(formatted(price-progress.flux)) MORE FLUX",on:panel,at:CGPoint(x:0,y:-h*0.31),size:9,color:NeonColors.mutedText,align:.center,width:w-32)
+        for (i,title) in ["CANCEL",affordable ? (owned ? "EQUIP SHIP":"CONFIRM PURCHASE") : "INSUFFICIENT FLUX"].enumerated() {
+            let button=NeonButton(title:title,size:CGSize(width:(w-42)/2,height:34),color:i==0 ? .gray:NeonColors.green)
+            button.name=i==0 ? "cancelPurchase" : (affordable ? "confirmPurchase":"unavailablePurchase")
+            button.alpha=i==1 && !affordable ? 0.45:1;button.position=CGPoint(x:(i==0 ? -1:1)*(w-18)/4,y:-h/2+25);panel.addChild(button)
         }
     }
 }
